@@ -14,7 +14,7 @@ let
 in
 {
   options = {
-    enable = mkEnableOption "Whether to enable this file." // {
+    enable = mkEnableOption "this file." // {
       default = true;
       example = false;
     };
