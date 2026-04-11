@@ -51,7 +51,7 @@ profile
 // {
   switch =
     let
-      nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features";
+      nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
     in
     writeShellScriptBin "switch" ''
       TARGET=''${XDG_STATE_HOME:-$HOME/.local/state}
