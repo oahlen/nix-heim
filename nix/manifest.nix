@@ -33,7 +33,7 @@ let
       let
         fileType = entries.${name};
         relativePath = joinPaths prefix name;
-        childPath = joinPaths dir name;
+        childPath = dir + "/${name}"; # Avoids coercing linked source file into the nix store
       in
       if fileType == "directory" then
         listFilesRecursive relativePath childPath
@@ -70,7 +70,8 @@ let
           throw "files.${name}.source does not exist: ${toString sourcePath}";
 
       mkEntry = target: source: {
-        inherit source target;
+        source = toString source; # Early toString avoids coercing linked source file into the nix store
+        inherit target;
         inherit (file) overwrite;
       };
 
