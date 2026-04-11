@@ -7,19 +7,20 @@ let
     concatLists
     concatMap
     filterAttrs
-    hasPrefix
     mapAttrsToList
     sort
     ;
 
-  normalizeTarget =
-    base: target:
-    if hasPrefix "/" target || hasPrefix "~/" target || target == "~" then
-      target
-    else
-      "${base}/${target}";
+  version = 1;
 
-  joinTarget = base: suffix: if suffix == "" then base else "${base}/${suffix}";
+  joinPaths =
+    base: suffix:
+    if base == "" then
+      suffix
+    else if suffix == "" then
+      base
+    else
+      "${base}/${suffix}";
 
   listFilesRecursive =
     prefix: dir:
@@ -31,8 +32,8 @@ let
       name:
       let
         fileType = entries.${name};
-        relativePath = if prefix == "" then name else "${prefix}/${name}";
-        childPath = dir + "/${name}";
+        relativePath = joinPaths prefix name;
+        childPath = joinPaths dir name;
       in
       if fileType == "directory" then
         listFilesRecursive relativePath childPath
@@ -50,7 +51,7 @@ let
   expandFile =
     name: file:
     let
-      targetRoot = normalizeTarget file.relativeTo file.target;
+      targetRoot = joinPaths file.relativeTo file.target;
 
       sourcePath =
         if file.source == null && file.text == null then
@@ -78,7 +79,7 @@ let
         !lib.isDerivation checkedSourcePath && builtins.readFileType checkedSourcePath == "directory";
     in
     if isDir && file.recursive then
-      map (entry: mkEntry (joinTarget targetRoot entry.relative) entry.source) (
+      map (entry: mkEntry (joinPaths targetRoot entry.relative) entry.source) (
         listFilesRecursive "" checkedSourcePath
       )
     else

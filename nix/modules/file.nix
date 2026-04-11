@@ -23,6 +23,12 @@ in
       type = types.str;
       default = name;
       description = "Target path for the file or directory to install relative to the base directory.";
+      apply =
+        x:
+        lib.throwIf (lib.hasPrefix "/" x || lib.hasPrefix "~" x || lib.hasInfix "../" x) ''
+          The target path '${x}' cannot be used for files.<path>.target.
+          Absolute paths, tilde expansion or relative path traversal is not allowed.
+        '' x;
     };
 
     source = mkOption {
