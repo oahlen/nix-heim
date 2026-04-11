@@ -34,8 +34,12 @@ let
 
   manifest = writeText "manifest.json" (generateManifest files);
 
+  linker = pkgs.callPackage ../heim { };
+
+  # TODO Enable when linker is ready
   activationScript = writeShellScriptBin "activate" ''
     cat ${manifest}
+    # ${lib.getExe linker}
   '';
 
   profile = buildEnv {
