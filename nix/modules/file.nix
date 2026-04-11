@@ -49,9 +49,9 @@ in
     };
 
     executable = mkOption {
-      type = types.nullOr types.bool;
-      default = null;
-      description = "Whether the installed file should be executable.";
+      type = types.bool;
+      default = false;
+      description = "Whether the installed file should be executable. If left null the source file permissions are used.";
     };
 
     relativeTo = mkOption {
@@ -61,10 +61,18 @@ in
       description = "Path that installed symlinks are relative to.";
       apply =
         x:
-        assert (
-          lib.hasPrefix "/" x || abort "Relative path ${x} cannot be used for files.<path>.relativeTo"
-        );
-        x;
+        lib.throwIf (
+          !lib.hasPrefix "/" x
+        ) "Relative path ${x} cannot be used for files.<path>.relativeTo" x;
+    };
+
+    overwrite = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to overwrite existing file in the target install path.
+        Takes precendence over the globally configured overwrite option.
+      '';
     };
   };
 }

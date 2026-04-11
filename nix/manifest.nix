@@ -9,7 +9,6 @@ let
     filterAttrs
     hasPrefix
     mapAttrsToList
-    optionalAttrs
     sort
     ;
 
@@ -69,13 +68,11 @@ let
         else
           throw "files.${name}.source does not exist: ${toString sourcePath}";
 
-      mkEntry =
-        target: source:
-        {
-          source = toString source;
-          inherit target;
-        }
-        // optionalAttrs (file.executable != null) { inherit (file) executable; };
+      mkEntry = target: source: {
+        source = toString source;
+        inherit target;
+        inherit (file) executable overwrite;
+      };
 
       isDir =
         !lib.isDerivation checkedSourcePath && builtins.readFileType checkedSourcePath == "directory";
@@ -94,6 +91,11 @@ in
       resultingFiles = concatMap (
         fileSet: mapAttrsToList expandFile (filterAttrs (_: file: file.enable) fileSet)
       ) files;
+
+      payload = {
+        files = concatLists resultingFiles;
+        inherit version;
+      };
     in
-    builtins.toJSON (concatLists resultingFiles);
+    builtins.toJSON payload;
 }
