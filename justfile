@@ -8,11 +8,11 @@ help:
 @checks: nix-checks rust-checks
 
 # Run all nix formatters and checks
-@nix-checks: nix-test nix-fmt nix-lint
+@nix-checks: nix-fmt nix-lint
 
-# Run nix tests
-nix-test:
-    nix build -f tests && ./result/bin/activate | jq
+# Builds and verifies the test manifest
+@manifest:
+    nix build -f tests manifest && jq < ./result
 
 # Format nix code
 @nix-fmt:
@@ -24,6 +24,10 @@ nix-test:
 
 # Run all rust formatters and checks
 @rust-checks: rust-test rust-fmt rust-lint
+
+# Run rust build
+rust-build:
+    cargo build --manifest-path heim/Cargo.toml
 
 # Run rust tests
 rust-test:

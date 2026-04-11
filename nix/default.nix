@@ -36,14 +36,20 @@ let
 
   linker = pkgs.callPackage ../heim { };
 
-  # TODO Enable when linker is ready
   activationScript = writeShellScriptBin "activate" ''
-    cat ${manifest}
+    ${lib.getExe linker} activate ${manifest}
+  '';
+
+  deacticationScript = writeShellScriptBin "deactivate" ''
+    ${lib.getExe linker} deactivate ${manifest}
   '';
 
   profile = buildEnv {
     name = "heim-environment";
-    paths = cfg.home.packages ++ [ activationScript ];
+    paths = cfg.home.packages ++ [
+      activationScript
+      deacticationScript
+    ];
     inherit (cfg.home)
       pathsToLink
       extraOutputsToInstall
@@ -52,7 +58,10 @@ let
 in
 profile
 // {
+  inherit manifest;
+
   activate = activationScript;
+  deactivate = deacticationScript;
 
   switch =
     let
