@@ -52,64 +52,66 @@ in
       };
     };
 
-    xdg.config = {
-      directory = mkOption {
-        type = types.path;
-        default = "${config.home.directory}/.config";
-        defaultText = "$HOME/.config";
-        description = "The XDG config directory for the user.";
-      };
-
-      files = mkOption {
-        type = types.attrsOf (
-          types.submodule (import ./file.nix { rootDir = config.xdg.config.directory; })
-        );
-        default = { };
-        example = {
-          "config.toml".source = ./config.toml;
-          "example/generated.txt".text = "hello";
+    xdg = {
+      config = {
+        directory = mkOption {
+          type = types.path;
+          default = "${config.home.directory}/.config";
+          defaultText = "$HOME/.config";
+          description = "The XDG config directory for the user.";
         };
-        description = "Files to install under the configured XDG config directory.";
-      };
-    };
 
-    xdg.data = {
-      directory = mkOption {
-        type = types.path;
-        default = "${config.home.directory}/.local/share";
-        defaultText = "$HOME/.local/share";
-        description = "The XDG data directory for the user.";
-      };
-
-      files = mkOption {
-        type = types.attrsOf (types.submodule (import ./file.nix { rootDir = config.xdg.data.directory; }));
-        default = { };
-        example = {
-          "config.toml".source = ./config.toml;
-          "example/generated.txt".text = "hello";
+        files = mkOption {
+          type = types.attrsOf (
+            types.submodule (import ./file.nix { rootDir = config.xdg.config.directory; })
+          );
+          default = { };
+          example = {
+            "config.toml".source = ./config.toml;
+            "example/generated.txt".text = "hello";
+          };
+          description = "Files to install under the configured XDG config directory.";
         };
-        description = "Files to install under the configured XDG data directory.";
-      };
-    };
-
-    xdg.state = {
-      directory = mkOption {
-        type = types.path;
-        default = "${config.home.directory}/.local/state";
-        defaultText = "$HOME/.local/state";
-        description = "The XDG state directory for the user.";
       };
 
-      files = mkOption {
-        type = types.attrsOf (
-          types.submodule (import ./file.nix { rootDir = config.xdg.state.directory; })
-        );
-        default = { };
-        example = {
-          "config.toml".source = ./config.toml;
-          "example/generated.txt".text = "hello";
+      data = {
+        directory = mkOption {
+          type = types.path;
+          default = "${config.home.directory}/.local/share";
+          defaultText = "$HOME/.local/share";
+          description = "The XDG data directory for the user.";
         };
-        description = "Files to install under the configured XDG state directory.";
+
+        files = mkOption {
+          type = types.attrsOf (types.submodule (import ./file.nix { rootDir = config.xdg.data.directory; }));
+          default = { };
+          example = {
+            "config.toml".source = ./config.toml;
+            "example/generated.txt".text = "hello";
+          };
+          description = "Files to install under the configured XDG data directory.";
+        };
+      };
+
+      state = {
+        directory = mkOption {
+          type = types.path;
+          default = "${config.home.directory}/.local/state";
+          defaultText = "$HOME/.local/state";
+          description = "The XDG state directory for the user.";
+        };
+
+        files = mkOption {
+          type = types.attrsOf (
+            types.submodule (import ./file.nix { rootDir = config.xdg.state.directory; })
+          );
+          default = { };
+          example = {
+            "config.toml".source = ./config.toml;
+            "example/generated.txt".text = "hello";
+          };
+          description = "Files to install under the configured XDG state directory.";
+        };
       };
     };
   };
