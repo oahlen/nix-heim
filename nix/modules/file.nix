@@ -69,7 +69,7 @@ in
         x:
         lib.throwIf (
           !lib.hasPrefix "/" x
-        ) "Relative path ${x} cannot be used for files.<path>.relativeTo" x;
+        ) "Relative path '${x}' cannot be used for files.<path>.relativeTo" x;
     };
 
     overwrite = mkOption {
@@ -77,7 +77,7 @@ in
       default = false;
       description = ''
         Whether to overwrite existing file in the target install path.
-        Takes precendence over the globally configured overwrite option.
+        Takes precedence over the globally configured overwrite option.
       '';
     };
   };

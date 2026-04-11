@@ -10,9 +10,7 @@ let
     ;
 
   assertAbsolutePath =
-    x: option:
-    assert (lib.hasPrefix "/" x || abort "Relative path ${x} cannot be used for ${option}");
-    x;
+    x: option: lib.throwIf (!lib.hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
 in
 {
   options = {
@@ -55,10 +53,11 @@ in
     xdg = {
       config = {
         directory = mkOption {
-          type = types.path;
+          type = types.str;
           default = "${config.home.directory}/.config";
           defaultText = "$HOME/.config";
           description = "The XDG config directory for the user.";
+          apply = x: assertAbsolutePath x "<xdg.config.directory>";
         };
 
         files = mkOption {
@@ -76,10 +75,11 @@ in
 
       data = {
         directory = mkOption {
-          type = types.path;
+          type = types.str;
           default = "${config.home.directory}/.local/share";
           defaultText = "$HOME/.local/share";
           description = "The XDG data directory for the user.";
+          apply = x: assertAbsolutePath x "<xdg.data.directory>";
         };
 
         files = mkOption {
@@ -95,10 +95,11 @@ in
 
       state = {
         directory = mkOption {
-          type = types.path;
+          type = types.str;
           default = "${config.home.directory}/.local/state";
           defaultText = "$HOME/.local/state";
           description = "The XDG state directory for the user.";
+          apply = x: assertAbsolutePath x "<xdg.state.directory>";
         };
 
         files = mkOption {
