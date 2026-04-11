@@ -91,5 +91,26 @@ in
         description = "Files to install under the configured XDG data directory.";
       };
     };
+
+    xdg.state = {
+      directory = mkOption {
+        type = types.path;
+        default = "${config.home.directory}/.local/state";
+        defaultText = "$HOME/.local/state";
+        description = "The XDG state directory for the user.";
+      };
+
+      files = mkOption {
+        type = types.attrsOf (
+          types.submodule (import ./file.nix { rootDir = config.xdg.state.directory; })
+        );
+        default = { };
+        example = {
+          "config.toml".source = ./config.toml;
+          "example/generated.txt".text = "hello";
+        };
+        description = "Files to install under the configured XDG state directory.";
+      };
+    };
   };
 }

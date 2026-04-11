@@ -29,6 +29,7 @@ let
     cfg.home.files
     cfg.xdg.config.files
     cfg.xdg.data.files
+    cfg.xdg.state.files
   ];
 
   manifest = writeText "manifest.json" (generateManifest files);
