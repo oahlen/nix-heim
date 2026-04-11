@@ -1,3 +1,3 @@
 # Nix Heim
 
-The realm of you Nix based dotfiles
+The realm of your Nix based dotfiles
