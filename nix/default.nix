@@ -49,6 +49,8 @@ let
 in
 profile
 // {
+  activate = activationScript;
+
   switch =
     let
       nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
