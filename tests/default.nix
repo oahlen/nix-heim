@@ -7,13 +7,14 @@ nix-heim pkgs [
   {
     home = {
       directory = "/home/nixos";
+      overwrite = true;
 
       files = {
-        "directory1".source = ./files/directory1;
-        "directory2" = {
-          source = ./files/directory2;
-          recursive = true;
+        "directory1" = {
+          source = ./files/directory1;
+          overwrite = false;
         };
+        "directory2".source = ./files/directory2;
       };
     };
 

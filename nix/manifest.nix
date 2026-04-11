@@ -70,15 +70,14 @@ let
           throw "files.${name}.source does not exist: ${toString sourcePath}";
 
       mkEntry = target: source: {
-        source = toString source;
-        inherit target;
-        inherit (file) executable overwrite;
+        inherit source target;
+        inherit (file) overwrite;
       };
 
       isDir =
         !lib.isDerivation checkedSourcePath && builtins.readFileType checkedSourcePath == "directory";
     in
-    if isDir && file.recursive then
+    if isDir then
       map (entry: mkEntry (joinPaths targetRoot entry.relative) entry.source) (
         listFilesRecursive "" checkedSourcePath
       )

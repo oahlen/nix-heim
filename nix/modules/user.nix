@@ -9,6 +9,15 @@ let
     types
     ;
 
+  inherit (import ./file.nix) mkFileModule;
+
+  mkFileModule' =
+    rootDir:
+    mkFileModule {
+      inherit rootDir;
+      inherit (config.home) overwrite;
+    };
+
   assertAbsolutePath =
     x: option: lib.throwIf (!lib.hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
 in
@@ -40,13 +49,22 @@ in
       };
 
       files = mkOption {
-        type = types.attrsOf (types.submodule (import ./file.nix { rootDir = config.home.directory; }));
+        type = types.attrsOf (types.submodule (mkFileModule' config.home.directory));
         default = { };
         example = {
           "config.toml".source = ./config.toml;
           "example/generated.txt".text = "hello";
         };
         description = "Files to install in the configured home directory.";
+      };
+
+      overwrite = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Whether to overwrite existing files in the target install path.
+          Can be overridden by individual file options.
+        '';
       };
     };
 
@@ -61,9 +79,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (
-            types.submodule (import ./file.nix { rootDir = config.xdg.config.directory; })
-          );
+          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.config.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
@@ -83,7 +99,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (types.submodule (import ./file.nix { rootDir = config.xdg.data.directory; }));
+          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.data.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
@@ -103,9 +119,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (
-            types.submodule (import ./file.nix { rootDir = config.xdg.state.directory; })
-          );
+          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.state.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
