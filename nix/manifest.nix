@@ -13,14 +13,7 @@ let
 
   version = 1;
 
-  joinPaths =
-    base: suffix:
-    if base == "" then
-      suffix
-    else if suffix == "" then
-      base
-    else
-      "${base}/${suffix}";
+  joinTarget = base: suffix: if suffix == "" then base else "${base}/${suffix}";
 
   listFilesRecursive =
     prefix: dir:
@@ -32,7 +25,7 @@ let
       name:
       let
         fileType = entries.${name};
-        relativePath = joinPaths prefix name;
+        relativePath = joinTarget prefix name;
         childPath = dir + "/${name}"; # Avoids coercing linked source file into the nix store
       in
       if fileType == "directory" then
@@ -51,7 +44,7 @@ let
   expandFile =
     name: file:
     let
-      targetRoot = joinPaths file.relativeTo file.target;
+      targetRoot = joinTarget file.relativeTo file.target;
 
       sourcePath =
         if file.source == null && file.text == null then
@@ -79,7 +72,7 @@ let
         !lib.isDerivation checkedSourcePath && builtins.readFileType checkedSourcePath == "directory";
     in
     if isDir then
-      map (entry: mkEntry (joinPaths targetRoot entry.relative) entry.source) (
+      map (entry: mkEntry (joinTarget targetRoot entry.relative) entry.source) (
         listFilesRecursive "" checkedSourcePath
       )
     else
