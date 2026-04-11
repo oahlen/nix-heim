@@ -49,12 +49,16 @@ let
 in
 profile
 // {
-  switch = writeShellScriptBin "switch" ''
-    TARGET=''${XDG_STATE_HOME:-$HOME/.local/state}
-    mkdir -p "$TARGET/nix/profiles"
-    nix build ${profile} --profile "$TARGET/nix/profiles/profile"
-    ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
+  switch =
+    let
+      nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features";
+    in
+    writeShellScriptBin "switch" ''
+      TARGET=''${XDG_STATE_HOME:-$HOME/.local/state}
+      mkdir -p "$TARGET/nix/profiles"
+      ${nixCommand} build ${profile} --profile "$TARGET/nix/profiles/profile"
+      ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
 
-    ${lib.getExe activationScript}
-  '';
+      ${lib.getExe activationScript}
+    '';
 }
