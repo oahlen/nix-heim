@@ -1,6 +1,9 @@
 let
   sources = import ../npins;
-  pkgs = import sources.nixpkgs { };
+  pkgs = import sources.nixpkgs {
+    config = { };
+    overlays = [ ];
+  };
   nix-heim = import ../.;
 in
 nix-heim pkgs [

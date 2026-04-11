@@ -1,6 +1,9 @@
 let
   sources = import ./npins;
-  pkgs = import sources.nixpkgs { };
+  pkgs = import sources.nixpkgs {
+    config = { };
+    overlays = [ ];
+  };
 in
 pkgs.mkShell {
   NIX_SHELL = "nix-heim";
