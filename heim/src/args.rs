@@ -27,7 +27,7 @@ pub enum ActionType {
         manifest: PathBuf,
     },
     /// Deactivates all managed dotfiles referenced by the supplied manifest.
-    Deacitvate {
+    Deactivate {
         /// Path to the manifest json file.
         manifest: PathBuf,
     },

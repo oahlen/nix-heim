@@ -106,7 +106,7 @@ fn validate(entry: &Entry, home: &PathBuf) -> anyhow::Result<()> {
     if !entry.target.starts_with(home) {
         return Err(anyhow!(
             "Target path must be contained in user home directory: {}",
-            entry.source.display()
+            entry.target.display()
         ));
     }
 

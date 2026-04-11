@@ -40,7 +40,7 @@ let
     ${lib.getExe linker} activate ${manifest}
   '';
 
-  deacticationScript = writeShellScriptBin "deactivate" ''
+  deactivationScript = writeShellScriptBin "deactivate" ''
     ${lib.getExe linker} deactivate ${manifest}
   '';
 
@@ -48,7 +48,7 @@ let
     name = "heim-environment";
     paths = cfg.home.packages ++ [
       activationScript
-      deacticationScript
+      deactivationScript
     ];
     inherit (cfg.home)
       pathsToLink
@@ -61,7 +61,7 @@ profile
   inherit manifest;
 
   activate = activationScript;
-  deactivate = deacticationScript;
+  deactivate = deactivationScript;
 
   switch =
     let
