@@ -47,12 +47,10 @@ impl Entry {
             }
         }
 
-        if !self.target.is_symlink() && self.exists() && self.overwrite {
-            self.remove_target_file();
-        }
-
         if self.target.is_symlink() && !self.exists() {
             self.remove_broken_symlink();
+        } else if self.exists() && self.overwrite {
+            self.remove_target_file();
         }
 
         match unix_fs::symlink(&self.source, &self.target) {
