@@ -14,11 +14,18 @@ pub struct Action {
 }
 
 impl Action {
-    pub fn new(manifest_path: PathBuf, dry_run: bool) -> Action {
-        Action {
-            manifest_path,
+    pub fn new(manifest_path: PathBuf, dry_run: bool) -> anyhow::Result<Action> {
+        let resolved_path = manifest_path.canonicalize().with_context(|| {
+            format!(
+                "Failed to resolve manifest path: {}",
+                manifest_path.display()
+            )
+        })?;
+
+        Ok(Action {
+            manifest_path: resolved_path,
             dry_run,
-        }
+        })
     }
 
     pub fn activate(&self) -> anyhow::Result<()> {

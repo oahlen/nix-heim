@@ -20,7 +20,7 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     match args.action {
-        ActionType::Activate { manifest } => Action::new(manifest, args.dry_run).activate(),
-        ActionType::Deactivate { manifest } => Action::new(manifest, args.dry_run).deactivate(),
+        ActionType::Activate { manifest } => Action::new(manifest, args.dry_run)?.activate(),
+        ActionType::Deactivate { manifest } => Action::new(manifest, args.dry_run)?.deactivate(),
     }
 }

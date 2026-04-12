@@ -38,15 +38,11 @@ impl Manifest {
     }
 
     pub fn load(path: &Path) -> anyhow::Result<Manifest> {
-        let canonical = path
-            .canonicalize()
-            .with_context(|| format!("Failed to resolve manifest path: {}", path.display()))?;
-
-        let content = std::fs::read_to_string(&canonical)
-            .with_context(|| format!("Failed to read manifest: {}", canonical.display()))?;
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
         let manifest: Manifest = serde_json::from_str(&content)
-            .with_context(|| format!("Failed to parse manifest: {}", canonical.display()))?;
+            .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
 
         debug!(
             "Parsed manifest {} with version {}",
@@ -142,7 +138,10 @@ pub fn save_manifest_to_state(src: &Path) -> anyhow::Result<()> {
             .with_context(|| format!("Failed to create state directory: {}", parent.display()))?;
     }
 
-    fs::copy(src, &dest)
+    let content =
+        fs::read(src).with_context(|| format!("Failed to read manifest: {}", src.display()))?;
+
+    fs::write(&dest, content)
         .with_context(|| format!("Failed to save manifest to: {}", dest.display()))?;
 
     Ok(())
