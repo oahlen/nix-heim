@@ -13,7 +13,14 @@ let
 
   version = 1;
 
-  joinTarget = base: suffix: if suffix == "" then base else "${base}/${suffix}";
+  joinTarget =
+    base: suffix:
+    if base == "" then
+      suffix
+    else if suffix == "" then
+      base
+    else
+      "${base}/${suffix}";
 
   listFilesRecursive =
     prefix: dir:
