@@ -1,6 +1,6 @@
 use std::{fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
 
-use log::{error, info, warn};
+use log::{error, warn};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
@@ -11,27 +11,6 @@ pub struct Entry {
 }
 
 impl Entry {
-    pub fn is_installed(&self) -> bool {
-        if !self.target.is_symlink() {
-            return false;
-        }
-
-        match fs::read_link(&self.target) {
-            Ok(current) => current == *self.source,
-            Err(_) => false,
-        }
-    }
-
-    pub fn exists(&self) -> bool {
-        if let Ok(result) = self.target.try_exists()
-            && result
-        {
-            return true;
-        }
-
-        false
-    }
-
     pub fn install(&self) {
         if let Some(parent) = self.target.parent() {
             match fs::create_dir_all(parent) {
@@ -47,10 +26,19 @@ impl Entry {
             }
         }
 
-        if self.target.is_symlink() && !self.exists() {
-            self.remove_broken_symlink();
-        } else if self.exists() && self.overwrite {
-            self.remove_target_file();
+        if self.target_exists() && self.overwrite {
+            warn!("Overwriting existing file {}", self.target.display());
+
+            match fs::remove_file(&self.target) {
+                Ok(_) => {}
+                Err(err) => {
+                    error!(
+                        "Failed to remove existing file {}: {}",
+                        self.target.display(),
+                        err
+                    );
+                }
+            }
         }
 
         match unix_fs::symlink(&self.source, &self.target) {
@@ -61,42 +49,27 @@ impl Entry {
         }
     }
 
-    fn remove_target_file(&self) {
-        warn!("Overwriting existing file {}", self.target.display());
-
-        match fs::remove_file(&self.target) {
-            Ok(_) => {}
-            Err(err) => {
-                error!(
-                    "Failed to remove existing file {}: {}",
-                    self.target.display(),
-                    err
-                );
-            }
-        }
-    }
-
-    fn remove_broken_symlink(&self) {
-        info!("Overwriting broken symlink at {}", &self.target.display());
-
-        match fs::remove_file(&self.target) {
-            Ok(_) => {}
-            Err(err) => {
-                error!(
-                    "Failed to cleanup broken symlink {}: {}",
-                    self.target.display(),
-                    err
-                );
-            }
-        }
-    }
-
     pub fn uninstall(&self) {
         match fs::remove_file(&self.target) {
             Ok(_) => {}
             Err(err) => {
                 error!("Failed to remove symlink {}: {}", self, err);
             }
+        }
+    }
+
+    pub fn target_exists(&self) -> bool {
+        self.target.symlink_metadata().is_ok()
+    }
+
+    pub fn is_installed(&self) -> bool {
+        if !self.target.is_symlink() {
+            return false;
+        }
+
+        match fs::read_link(&self.target) {
+            Ok(current) => current == *self.source,
+            Err(_) => false,
         }
     }
 }

@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::{Context, anyhow};
-use log::{debug, info};
+use log::{debug, info, trace};
 
 use crate::{
     entry::Entry,
@@ -41,9 +41,16 @@ impl Action {
         self.pre_flight_check(&delta.install, &delta.remove)?;
 
         for entry in &delta.remove {
-            info!("Removing entry {}", entry);
-            if !self.dry_run {
-                entry.uninstall();
+            if entry.target_exists() {
+                debug!("Removing entry {}", entry);
+                if !self.dry_run {
+                    entry.uninstall();
+                }
+            } else {
+                trace!(
+                    "Entry {} specified in previous manifest no longer exists, skipping ...",
+                    entry,
+                )
             }
         }
 
@@ -52,9 +59,12 @@ impl Action {
         }
 
         for entry in &delta.install {
-            info!("Installing entry {}", entry);
-            if !self.dry_run {
-                entry.install();
+            if !entry.is_installed() {
+                info!("Installing entry {}", entry);
+
+                if !self.dry_run {
+                    entry.install();
+                }
             }
         }
 
@@ -70,7 +80,7 @@ impl Action {
 
         let conflicts: Vec<_> = to_install
             .iter()
-            .filter(|entry| entry.exists() && !excluded_targets.contains(&entry.target))
+            .filter(|entry| entry.target_exists() && !excluded_targets.contains(&entry.target))
             .filter(|entry| !entry.overwrite)
             .collect();
 
@@ -118,6 +128,7 @@ impl Action {
 fn uninstall_entry(entry: &Entry, dry_run: bool) {
     if entry.is_installed() {
         info!("Uninstalling entry {}", entry);
+
         if !dry_run {
             entry.uninstall();
         }

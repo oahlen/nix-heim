@@ -27,17 +27,22 @@ pub struct ManifestDelta<'a> {
 }
 
 impl Manifest {
+    pub fn load(path: &Path) -> anyhow::Result<Manifest> {
+        Manifest::load_internal(path, false)
+    }
+
     pub fn load_previous() -> anyhow::Result<Manifest> {
         let path = state_path()?;
 
         Ok(if path.exists() {
-            Manifest::load(&path).context("Failed to load previously installed manifest")?
+            Manifest::load_internal(&path, true)
+                .context("Failed to load previously installed manifest")?
         } else {
             Manifest::default()
         })
     }
 
-    pub fn load(path: &Path) -> anyhow::Result<Manifest> {
+    fn load_internal(path: &Path, lenient: bool) -> anyhow::Result<Manifest> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
@@ -50,6 +55,10 @@ impl Manifest {
             manifest.version
         );
 
+        if lenient {
+            return Ok(manifest);
+        }
+
         let home = home()?;
 
         for entry in &manifest.files {
@@ -57,6 +66,7 @@ impl Manifest {
         }
 
         ensure_no_duplicates(&manifest.files)?;
+
         Ok(manifest)
     }
 
