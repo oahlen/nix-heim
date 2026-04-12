@@ -60,9 +60,9 @@
           description = "Path that installed symlinks are relative to.";
           apply =
             x:
-            lib.throwIf (
-              !lib.hasPrefix "/" x
-            ) "Relative path '${x}' cannot be used for files.<path>.relativeTo" x;
+            lib.throwIfNot (lib.hasPrefix "/" x)
+              "Relative path '${x}' cannot be used for files.<path>.relativeTo"
+              x;
         };
 
         overwrite = mkOption {

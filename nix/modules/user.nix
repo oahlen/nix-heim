@@ -19,7 +19,8 @@ let
     };
 
   assertAbsolutePath =
-    x: option: lib.throwIf (!lib.hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
+    x: option:
+    lib.throwIfNot (lib.hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
 in
 {
   options = {
