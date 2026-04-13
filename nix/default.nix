@@ -13,6 +13,8 @@ let
     ;
 
   evaluated = lib.evalModules {
+    class = "heim";
+
     specialArgs = {
       inherit pkgs lib;
     }
@@ -72,25 +74,26 @@ let
 
   profile = buildEnv {
     name = "heim-environment";
+
     paths = cfg.home.packages ++ [
       activationScript
       deactivationScript
       switchScript
     ];
+
     inherit (cfg.home)
       pathsToLink
       extraOutputsToInstall
       ;
+
+    passthru = {
+      inherit manifest;
+      activate = activationScript;
+      deactivate = deactivationScript;
+      install = writeShellScriptBin "install" ''
+        ${lib.getExe switchScript} ${profile}
+      '';
+    };
   };
 in
 profile
-// {
-  inherit manifest;
-
-  activate = activationScript;
-  deactivate = deactivationScript;
-
-  install = writeShellScriptBin "install" ''
-    ${lib.getExe switchScript} ${profile}
-  '';
-}
