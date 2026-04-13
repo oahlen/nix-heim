@@ -15,7 +15,7 @@ let
     modules = lib.singleton (
       { config, ... }:
       {
-        imports = import ../modules/user.nix;
+        imports = [ ../modules/user.nix ];
         config._module.args = {
           inherit pkgs;
         };
@@ -55,7 +55,7 @@ let
           in
           lib.mkIf (config.heim != null) [
             (pkgs.writeShellScriptBin "heim-activate" ''
-              ${lib.getExe linker} activate ${manifest})
+              ${lib.getExe linker} activate ${manifest}
             '')
           ]
           ++ config.heim.home.packages;
@@ -64,7 +64,9 @@ let
 
 in
 {
-  users.users = mkOption {
-    type = types.attrsOf (types.submodule userSubmodule);
+  options = {
+    users.users = mkOption {
+      type = types.attrsOf (types.submodule userSubmodule);
+    };
   };
 }
