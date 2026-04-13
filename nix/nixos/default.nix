@@ -44,7 +44,7 @@ let
               config.heim.xdg.state.files
             ];
 
-            inherit (import ./manifest.nix { inherit lib pkgs; })
+            inherit (import ../manifest.nix { inherit lib pkgs; })
               generateManifest
               ;
 
@@ -53,12 +53,14 @@ let
             linker = pkgs.callPackage ../../heim { };
 
           in
-          lib.mkIf (config.heim != null) [
-            (pkgs.writeShellScriptBin "heim-activate" ''
-              ${lib.getExe linker} activate ${manifest}
-            '')
-          ]
-          ++ config.heim.home.packages;
+          lib.mkIf (config.heim != null) (
+            [
+              (pkgs.writeShellScriptBin "heim-activate" ''
+                ${lib.getExe linker} activate ${manifest}
+              '')
+            ]
+            ++ config.heim.home.packages
+          );
       };
     };
 
