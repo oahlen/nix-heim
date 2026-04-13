@@ -36,12 +36,38 @@ let
 
   linker = pkgs.callPackage ../heim { };
 
-  activationScript = writeShellScriptBin "activate" ''
+  nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
+
+  activationScript = writeShellScriptBin "heim-activate" ''
     ${lib.getExe linker} activate ${manifest}
   '';
 
-  deactivationScript = writeShellScriptBin "deactivate" ''
+  deactivationScript = writeShellScriptBin "heim-deactivate" ''
     ${lib.getExe linker} deactivate ${manifest}
+  '';
+
+  switchScript = writeShellScriptBin "heim-switch" ''
+    TARGET=''${XDG_STATE_HOME:-$HOME/.local/state}
+    mkdir -p "$TARGET/nix/profiles"
+
+    FILE="$1"
+    ATTR="$2"
+
+    if [[ -z "$FILE" ]]; then
+      echo "Error: no file provided"
+      echo "Usage: heim-switch <file> [attribute]"
+      exit 1
+    fi
+
+    if [[ "$FILE" == /nix/store/* ]]; then
+      ${nixCommand} build "$FILE" --profile "$TARGET/nix/profiles/profile" --no-link
+    else
+      ${nixCommand} build -f "$FILE" $ATTR --profile "$TARGET/nix/profiles/profile" --no-link
+    fi
+
+    ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
+
+    ${lib.getExe activationScript}
   '';
 
   profile = buildEnv {
@@ -49,6 +75,7 @@ let
     paths = cfg.home.packages ++ [
       activationScript
       deactivationScript
+      switchScript
     ];
     inherit (cfg.home)
       pathsToLink
@@ -63,16 +90,7 @@ profile
   activate = activationScript;
   deactivate = deactivationScript;
 
-  switch =
-    let
-      nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
-    in
-    writeShellScriptBin "switch" ''
-      TARGET=''${XDG_STATE_HOME:-$HOME/.local/state}
-      mkdir -p "$TARGET/nix/profiles"
-      ${nixCommand} build ${profile} --profile "$TARGET/nix/profiles/profile"
-      ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
-
-      ${lib.getExe activationScript}
-    '';
+  install = writeShellScriptBin "install" ''
+    ${lib.getExe switchScript} ${profile}
+  '';
 }
