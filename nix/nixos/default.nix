@@ -23,7 +23,7 @@ let
   };
 
   userSubmodule =
-    { config, ... }:
+    { config, name, ... }:
     {
       options = {
         heim = mkOption {
@@ -34,9 +34,20 @@ let
       };
 
       config = {
+        heim =
+          let
+            cfg = config.heim;
+          in
+          if cfg != null then
+            cfg // { home.directory = cfg.home.directory or config.homeDir or "/home/${name}"; }
+          else
+            null;
+
         packages =
           let
-            manifest = pkgs.callPackage ../heim/manifest.nix { inherit (config.heim) files; };
+            cfg = config.heim;
+
+            manifest = pkgs.callPackage ../heim/manifest.nix { inherit (cfg) files; };
 
             linker = pkgs.callPackage ../../heim/package.nix { };
 
