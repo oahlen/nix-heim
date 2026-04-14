@@ -14,7 +14,7 @@ let
     modules = lib.singleton (
       { config, ... }:
       {
-        imports = [ ../modules/user.nix ] ++ scope.config.heim.sharedModules;
+        imports = [ ../heim/modules/user.nix ] ++ scope.config.heim.sharedModules;
         config._module.args = {
           inherit lib pkgs;
         };
