@@ -15,7 +15,7 @@ let
     rootDir:
     mkFileModule {
       inherit rootDir;
-      inherit (config.home) overwrite;
+      inherit (config) overwrite;
     };
 
   assertAbsolutePath =
@@ -31,24 +31,6 @@ in
         apply = x: assertAbsolutePath x "<home.directory>";
       };
 
-      packages = lib.mkOption {
-        type = lib.types.listOf lib.types.package;
-        default = [ ];
-        description = "Packages to include in the resulting profile environment.";
-      };
-
-      pathsToLink = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ "/bin" ];
-        description = "Paths to link in the resulting profile environment.";
-      };
-
-      extraOutputsToInstall = lib.mkOption {
-        type = lib.types.listOf lib.types.str;
-        default = [ ];
-        description = "Extra outputs to install for packages in the resulting profile environment.";
-      };
-
       files = mkOption {
         type = types.attrsOf (types.submodule (mkFileModule' config.home.directory));
         default = { };
@@ -57,15 +39,6 @@ in
           "example/generated.txt".text = "hello";
         };
         description = "Files to install in the configured home directory.";
-      };
-
-      overwrite = mkOption {
-        type = types.bool;
-        default = false;
-        description = ''
-          Whether to overwrite existing files in the target install path.
-          Can be overridden by individual file options.
-        '';
       };
     };
 
@@ -131,6 +104,34 @@ in
       };
     };
 
+    packages = lib.mkOption {
+      type = lib.types.listOf lib.types.package;
+      default = [ ];
+      description = "Packages to include in the resulting profile environment.";
+    };
+
+    pathsToLink = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "/bin" ];
+      description = "Paths to link in the resulting profile environment.";
+    };
+
+    extraOutputsToInstall = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ ];
+      description = "Extra outputs to install for packages in the resulting profile environment.";
+    };
+
+    overwrite = mkOption {
+      type = types.bool;
+      default = false;
+      description = ''
+        Whether to overwrite existing files in the target install path.
+        Can be overridden by individual file options.
+      '';
+    };
+
+    # Internal options
     files = mkOption {
       type = types.listOf types.attrs;
       readOnly = true;

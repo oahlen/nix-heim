@@ -68,14 +68,14 @@ let
   profile = buildEnv {
     name = "heim-environment";
 
-    paths = cfg.home.packages ++ [
+    paths = cfg.packages ++ [
       linker
       activationScript
       deactivationScript
       switchScript
     ];
 
-    inherit (cfg.home)
+    inherit (cfg)
       pathsToLink
       extraOutputsToInstall
       ;

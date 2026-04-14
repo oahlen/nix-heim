@@ -54,7 +54,7 @@ let
               activationScript
               deactivationScript
             ]
-            ++ config.heim.home.packages
+            ++ config.heim.packages
           );
       };
     };

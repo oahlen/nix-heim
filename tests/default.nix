@@ -8,9 +8,10 @@ let
 in
 nix-heim pkgs [
   {
+    overwrite = true;
+
     home = {
       directory = "/home/nixos";
-      overwrite = true;
 
       files = {
         "directory1" = {
