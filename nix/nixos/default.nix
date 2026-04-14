@@ -37,14 +37,22 @@ let
         packages =
           let
             manifest = pkgs.callPackage ../heim/manifest.nix { inherit (config.heim) files; };
+
             linker = pkgs.callPackage ../../heim/package.nix { };
+
+            activationScript = pkgs.writeShellScriptBin "heim-activate" ''
+              ${lib.getExe linker} activate ${manifest}
+            '';
+
+            deactivationScript = pkgs.writeShellScriptBin "heim-deactivate" ''
+              ${lib.getExe linker} deactivate ${manifest}
+            '';
           in
           lib.mkIf (config.heim != null) (
             [
               linker
-              (pkgs.writeShellScriptBin "heim-activate" ''
-                ${lib.getExe linker} activate ${manifest}
-              '')
+              activationScript
+              deactivationScript
             ]
             ++ config.heim.home.packages
           );
