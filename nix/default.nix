@@ -36,7 +36,7 @@ let
 
   manifest = writeText "manifest.json" (generateManifest files);
 
-  linker = pkgs.callPackage ../heim { };
+  linker = pkgs.callPackage ../heim/package.nix { };
 
   nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
 

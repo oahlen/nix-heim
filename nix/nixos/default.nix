@@ -49,7 +49,7 @@ let
 
             manifest = pkgs.writeText "manifest.json" (generateManifest files);
 
-            linker = pkgs.callPackage ../../heim { };
+            linker = pkgs.callPackage ../../heim/package.nix { };
 
           in
           lib.mkIf (config.heim != null) (
