@@ -16,7 +16,7 @@ let
       {
         imports = [ ../modules/user.nix ] ++ scope.config.heim.sharedModules;
         config._module.args = {
-          inherit pkgs;
+          inherit lib pkgs;
         };
       }
     );
