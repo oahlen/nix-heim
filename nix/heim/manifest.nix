@@ -1,6 +1,7 @@
 {
-  pkgs,
+  files ? [ ],
   lib,
+  writeText,
 }:
 let
   inherit (lib)
@@ -59,7 +60,7 @@ let
         else if file.source != null && file.text != null then
           throw "files.${name} must not define both source and text."
         else if file.source == null then
-          pkgs.writeText (lib.strings.sanitizeDerivationName name) file.text
+          writeText (lib.strings.sanitizeDerivationName name) file.text
         else
           file.source;
 
@@ -84,8 +85,7 @@ let
       )
     else
       [ (mkEntry targetRoot checkedSourcePath) ];
-in
-{
+
   generateManifest =
     files:
     let
@@ -99,4 +99,5 @@ in
       };
     in
     builtins.toJSON payload;
-}
+in
+writeText "manifest.json" (generateManifest files)

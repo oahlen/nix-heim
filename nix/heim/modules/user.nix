@@ -130,5 +130,18 @@ in
         };
       };
     };
+
+    files = mkOption {
+      type = types.listOf types.attrs;
+      readOnly = true;
+      visible = false;
+    };
   };
+
+  config.files = [
+    config.home.files
+    config.xdg.config.files
+    config.xdg.data.files
+    config.xdg.state.files
+  ];
 }

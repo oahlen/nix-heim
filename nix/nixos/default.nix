@@ -36,24 +36,12 @@ let
       config = {
         packages =
           let
-            files = [
-              config.heim.home.files
-              config.heim.xdg.config.files
-              config.heim.xdg.data.files
-              config.heim.xdg.state.files
-            ];
-
-            inherit (import ../manifest.nix { inherit lib pkgs; })
-              generateManifest
-              ;
-
-            manifest = pkgs.writeText "manifest.json" (generateManifest files);
-
+            manifest = pkgs.callPackage ../heim/manifest.nix { inherit (config.heim) files; };
             linker = pkgs.callPackage ../../heim/package.nix { };
-
           in
           lib.mkIf (config.heim != null) (
             [
+              linker
               (pkgs.writeShellScriptBin "heim-activate" ''
                 ${lib.getExe linker} activate ${manifest}
               '')
@@ -62,7 +50,6 @@ let
           );
       };
     };
-
 in
 {
   options = {

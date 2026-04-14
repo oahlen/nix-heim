@@ -8,10 +8,6 @@
   writeText,
 }:
 let
-  inherit (import ./manifest.nix { inherit lib pkgs; })
-    generateManifest
-    ;
-
   evaluated = lib.evalModules {
     class = "heim";
 
@@ -27,16 +23,9 @@ let
 
   cfg = evaluated.config;
 
-  files = [
-    cfg.home.files
-    cfg.xdg.config.files
-    cfg.xdg.data.files
-    cfg.xdg.state.files
-  ];
+  manifest = pkgs.callPackage ./manifest.nix { inherit (cfg) files; };
 
-  manifest = writeText "manifest.json" (generateManifest files);
-
-  linker = pkgs.callPackage ../heim/package.nix { };
+  linker = pkgs.callPackage ../../heim/package.nix { };
 
   nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
 
@@ -72,10 +61,15 @@ let
     ${lib.getExe activationScript}
   '';
 
+  installScript = writeShellScriptBin "install" ''
+    ${lib.getExe switchScript} ${profile}
+  '';
+
   profile = buildEnv {
     name = "heim-environment";
 
     paths = cfg.home.packages ++ [
+      linker
       activationScript
       deactivationScript
       switchScript
@@ -90,9 +84,7 @@ let
       inherit manifest;
       activate = activationScript;
       deactivate = deactivationScript;
-      install = writeShellScriptBin "install" ''
-        ${lib.getExe switchScript} ${profile}
-      '';
+      install = installScript;
     };
   };
 in
