@@ -1,9 +1,8 @@
 {
-  config,
   lib,
   pkgs,
   ...
-}:
+}@scope:
 let
   inherit (lib)
     mkOption
@@ -15,7 +14,7 @@ let
     modules = lib.singleton (
       { config, ... }:
       {
-        imports = [ ../modules/user.nix ];
+        imports = [ ../modules/user.nix ] ++ scope.config.heim.sharedModules;
         config._module.args = {
           inherit pkgs;
         };
@@ -69,6 +68,13 @@ in
   options = {
     users.users = mkOption {
       type = types.attrsOf (types.submodule userSubmodule);
+    };
+
+    heim.sharedModules = mkOption {
+      description = "Common Heim modules to import.";
+      default = [ ];
+      example = lib.literalExpression "[ ./module.nix ]";
+      type = types.listOf types.raw;
     };
   };
 }
