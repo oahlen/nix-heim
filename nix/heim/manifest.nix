@@ -86,15 +86,28 @@ let
     else
       [ (mkEntry targetRoot checkedSourcePath) ];
 
+  expandFiles =
+    files:
+    let
+      expandedFileSets = concatMap (
+        fileSet: mapAttrsToList expandFile (filterAttrs (_: file: file.enable) fileSet)
+      ) files;
+    in
+    concatLists expandedFileSets;
+
+  validate =
+    files:
+    let
+      grouped = builtins.groupBy (file: file.target) files;
+      duplicates = builtins.filter (key: builtins.length grouped.${key} > 1) (builtins.attrNames grouped);
+    in
+    if duplicates == [ ] then files else throw "Duplicate targets found: ${builtins.toJSON duplicates}";
+
   generateManifest =
     files:
     let
-      resultingFiles = concatMap (
-        fileSet: mapAttrsToList expandFile (filterAttrs (_: file: file.enable) fileSet)
-      ) files;
-
       payload = {
-        files = concatLists resultingFiles;
+        files = validate (expandFiles files);
         inherit version;
       };
     in
