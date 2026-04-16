@@ -5,13 +5,23 @@
 }@global:
 let
   inherit (lib)
+    getExe
+    literalExpression
+    mkDefault
+    mkIf
     mkOption
+    singleton
     types
+    ;
+
+  inherit (pkgs)
+    callPackage
+    writeShellScriptBin
     ;
 
   heimModule = types.submoduleWith {
     class = "heim";
-    modules = lib.singleton (
+    modules = singleton (
       { config, ... }:
       {
         imports = [ ../heim/modules/user.nix ] ++ global.config.heim.sharedModules;
@@ -34,23 +44,23 @@ let
       };
 
       config = {
-        heim.home.directory = lib.mkDefault global.config.users.users.${name}.home;
+        heim.home.directory = mkDefault global.config.users.users.${name}.home;
 
         packages =
           let
-            manifest = pkgs.callPackage ../heim/manifest.nix { inherit (config.heim) files; };
+            manifest = callPackage ../heim/manifest.nix { inherit (config.heim) files; };
 
-            linker = pkgs.callPackage ../../heim/package.nix { };
+            linker = callPackage ../../heim/package.nix { };
 
-            activationScript = pkgs.writeShellScriptBin "heim-activate" ''
-              ${lib.getExe linker} activate ${manifest}
+            activationScript = writeShellScriptBin "heim-activate" ''
+              ${getExe linker} activate ${manifest}
             '';
 
-            deactivationScript = pkgs.writeShellScriptBin "heim-deactivate" ''
-              ${lib.getExe linker} deactivate ${manifest}
+            deactivationScript = writeShellScriptBin "heim-deactivate" ''
+              ${getExe linker} deactivate ${manifest}
             '';
           in
-          lib.mkIf (config.heim != null) (
+          mkIf (config.heim != null) (
             [
               linker
               activationScript
@@ -70,7 +80,7 @@ in
     heim.sharedModules = mkOption {
       description = "Common Nix-heim modules to import.";
       default = [ ];
-      example = lib.literalExpression "[ ./module.nix ]";
+      example = literalExpression "[ ./module.nix ]";
       type = types.listOf types.raw;
     };
   };

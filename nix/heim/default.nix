@@ -1,13 +1,17 @@
 {
   buildEnv,
+  callPackage,
   lib,
   modules ? [ ],
+  nix,
   pkgs,
   specialArgs ? { },
   writeShellScriptBin,
   writeText,
 }:
 let
+  inherit (lib) getExe;
+
   evaluated = lib.evalModules {
     class = "heim";
 
@@ -23,18 +27,18 @@ let
 
   cfg = evaluated.config;
 
-  manifest = pkgs.callPackage ./manifest.nix { inherit (cfg) files; };
+  manifest = callPackage ./manifest.nix { inherit (cfg) files; };
 
-  linker = pkgs.callPackage ../../heim/package.nix { };
+  linker = callPackage ../../heim/package.nix { };
 
-  nixCommand = "${lib.getExe pkgs.nix} --extra-experimental-features \"nix-command\"";
+  nixCommand = "${getExe nix} --extra-experimental-features \"nix-command\"";
 
   activationScript = writeShellScriptBin "heim-activate" ''
-    ${lib.getExe linker} activate ${manifest}
+    ${getExe linker} activate ${manifest}
   '';
 
   deactivationScript = writeShellScriptBin "heim-deactivate" ''
-    ${lib.getExe linker} deactivate ${manifest}
+    ${getExe linker} deactivate ${manifest}
   '';
 
   switchScript = writeShellScriptBin "heim-switch" ''
@@ -58,11 +62,11 @@ let
 
     ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
 
-    ${lib.getExe activationScript}
+    ${getExe activationScript}
   '';
 
   installScript = writeShellScriptBin "install" ''
-    ${lib.getExe switchScript} ${profile}
+    ${getExe switchScript} ${profile}
   '';
 
   profile = buildEnv {

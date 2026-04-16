@@ -12,8 +12,12 @@
     }:
     let
       inherit (lib)
+        hasInfix
+        hasPrefix
         mkEnableOption
         mkOption
+        throwIf
+        throwIfNot
         types
         ;
     in
@@ -30,7 +34,7 @@
           description = "Target path for the file or directory to install relative to the base directory.";
           apply =
             x:
-            lib.throwIf (lib.hasPrefix "/" x || lib.hasPrefix "~" x || lib.hasInfix "../" x) ''
+            throwIf (hasPrefix "/" x || hasPrefix "~" x || hasInfix "../" x) ''
               The target path '${x}' cannot be used for files.<path>.target.
               Absolute paths, tilde expansion or relative path traversal is not allowed.
             '' x;
@@ -59,10 +63,7 @@
           default = rootDir;
           description = "Path that installed symlinks are relative to.";
           apply =
-            x:
-            lib.throwIfNot (lib.hasPrefix "/" x)
-              "Relative path '${x}' cannot be used for files.<path>.relativeTo"
-              x;
+            x: throwIfNot (hasPrefix "/" x) "Relative path '${x}' cannot be used for files.<path>.relativeTo" x;
         };
 
         overwrite = mkOption {

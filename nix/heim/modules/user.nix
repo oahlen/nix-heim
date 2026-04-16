@@ -5,7 +5,9 @@
 }:
 let
   inherit (lib)
+    hasPrefix
     mkOption
+    throwIfNot
     types
     ;
 
@@ -19,8 +21,7 @@ let
     };
 
   assertAbsolutePath =
-    x: option:
-    lib.throwIfNot (lib.hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
+    x: option: throwIfNot (hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
 in
 {
   options = {
@@ -107,14 +108,14 @@ in
       };
     };
 
-    packages = lib.mkOption {
-      type = lib.types.listOf lib.types.package;
+    packages = mkOption {
+      type = types.listOf types.package;
       default = [ ];
       description = "Packages to include in the resulting profile environment.";
     };
 
-    pathsToLink = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
+    pathsToLink = mkOption {
+      type = types.listOf types.str;
       default = [ "/bin" ];
       description = ''
         Paths to link in the resulting user profile environment.
@@ -123,8 +124,8 @@ in
       '';
     };
 
-    extraOutputsToInstall = lib.mkOption {
-      type = lib.types.listOf lib.types.str;
+    extraOutputsToInstall = mkOption {
+      type = types.listOf types.str;
       default = [ ];
       description = ''
         Extra outputs to install for packages in the resulting user profile environment.
