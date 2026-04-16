@@ -7,24 +7,29 @@ let
   nix-heim = import ../.;
 in
 nix-heim pkgs [
-  {
-    overwrite = true;
+  (
+    { pkgs, ... }:
+    {
+      overwrite = true;
 
-    home = {
-      directory = "/home/nixos";
+      home = {
+        directory = "/home/nixos";
 
-      files = {
-        "directory1" = {
-          source = ./files/directory1;
-          overwrite = false;
+        files = {
+          "directory1" = {
+            source = ./files/directory1;
+            overwrite = false;
+          };
+          "directory2".source = ./files/directory2;
         };
-        "directory2".source = ./files/directory2;
       };
-    };
 
-    xdg.config.files = {
-      "foobar/foobar_1.txt".source = ./files/file;
-      "foobar/foobar_2.txt".text = "foobar";
-    };
-  }
+      xdg.config.files = {
+        "foobar/foobar_1.txt".source = ./files/file;
+        "foobar/foobar_2.txt".text = "foobar";
+      };
+
+      packages = [ pkgs.htop ];
+    }
+  )
 ]
