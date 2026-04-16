@@ -5,7 +5,6 @@
 }@global:
 let
   inherit (lib)
-    getExe
     literalExpression
     mkDefault
     mkIf
@@ -14,10 +13,7 @@ let
     types
     ;
 
-  inherit (pkgs)
-    callPackage
-    writeShellScriptBin
-    ;
+  inherit (pkgs) callPackage;
 
   heimModule = types.submoduleWith {
     class = "heim";
@@ -48,23 +44,14 @@ let
 
         packages =
           let
-            manifest = callPackage ../heim/manifest.nix { inherit (config.heim) files; };
-
-            linker = callPackage ../../heim/package.nix { };
-
-            activationScript = writeShellScriptBin "heim-activate" ''
-              ${getExe linker} activate ${manifest}
-            '';
-
-            deactivationScript = writeShellScriptBin "heim-deactivate" ''
-              ${getExe linker} deactivate ${manifest}
-            '';
+            environment = callPackage ../heim/environment.nix { inherit (config.heim) files; };
           in
           mkIf (config.heim != null) (
+            with environment;
             [
               linker
-              activationScript
-              deactivationScript
+              activate
+              deactivate
             ]
             ++ config.heim.packages
           );
