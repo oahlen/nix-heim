@@ -23,7 +23,7 @@ let
   };
 
   userSubmodule =
-    { config, ... }:
+    { config, name, ... }:
     {
       options = {
         heim = mkOption {
@@ -34,6 +34,8 @@ let
       };
 
       config = {
+        heim.home.directory = lib.mkDefault "/home/${name}";
+
         packages =
           let
             manifest = pkgs.callPackage ../heim/manifest.nix { inherit (config.heim) files; };
