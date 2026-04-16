@@ -2,7 +2,7 @@
   lib,
   pkgs,
   ...
-}@scope:
+}@global:
 let
   inherit (lib)
     mkOption
@@ -14,7 +14,7 @@ let
     modules = lib.singleton (
       { config, ... }:
       {
-        imports = [ ../heim/modules/user.nix ] ++ scope.config.heim.sharedModules;
+        imports = [ ../heim/modules/user.nix ] ++ global.config.heim.sharedModules;
         config._module.args = {
           inherit lib pkgs;
         };
@@ -34,7 +34,7 @@ let
       };
 
       config = {
-        heim.home.directory = lib.mkDefault "/home/${name}";
+        heim.home.directory = lib.mkDefault global.config.users.users.${name}.home;
 
         packages =
           let
@@ -68,7 +68,7 @@ in
     };
 
     heim.sharedModules = mkOption {
-      description = "Common Heim modules to import.";
+      description = "Common Nix-heim modules to import.";
       default = [ ];
       example = lib.literalExpression "[ ./module.nix ]";
       type = types.listOf types.raw;

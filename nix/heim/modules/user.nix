@@ -27,7 +27,10 @@ in
     home = {
       directory = mkOption {
         type = types.str;
-        description = "Home directory of the user.";
+        description = ''
+          Home directory of the user.
+          When using nix-heim as a nixos module will by default set to `users.users.<name>.home`.
+        '';
         apply = x: assertAbsolutePath x "<home.directory>";
       };
 
@@ -116,7 +119,7 @@ in
       description = ''
         Paths to link in the resulting user profile environment.
         This option has no effect when using nix-heim as a NixOS module.
-        See <environment.pathsToLink> in NixOS to configure paths to link in user environments.
+        See `environment.pathsToLink` in NixOS to configure paths to link in user environments.
       '';
     };
 
@@ -126,7 +129,7 @@ in
       description = ''
         Extra outputs to install for packages in the resulting user profile environment.
         This option has no effect when using nix-heim as a NixOS module.
-        See <environment.extraOutputsToInstall> in NixOS to configure extra outputs in user environments.
+        See `environment.extraOutputsToInstall` in NixOS to configure extra outputs in user environments.
       '';
     };
 
