@@ -11,7 +11,7 @@ let
 
   inherit (import ./file.nix) mkFileModule;
 
-  mkFileModule' =
+  mkFileModuleWithRoot =
     rootDir:
     mkFileModule {
       inherit rootDir;
@@ -32,7 +32,7 @@ in
       };
 
       files = mkOption {
-        type = types.attrsOf (types.submodule (mkFileModule' config.home.directory));
+        type = types.attrsOf (types.submodule (mkFileModuleWithRoot config.home.directory));
         default = { };
         example = {
           "config.toml".source = ./config.toml;
@@ -53,7 +53,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.config.directory));
+          type = types.attrsOf (types.submodule (mkFileModuleWithRoot config.xdg.config.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
@@ -73,7 +73,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.data.directory));
+          type = types.attrsOf (types.submodule (mkFileModuleWithRoot config.xdg.data.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
@@ -93,7 +93,7 @@ in
         };
 
         files = mkOption {
-          type = types.attrsOf (types.submodule (mkFileModule' config.xdg.state.directory));
+          type = types.attrsOf (types.submodule (mkFileModuleWithRoot config.xdg.state.directory));
           default = { };
           example = {
             "config.toml".source = ./config.toml;
