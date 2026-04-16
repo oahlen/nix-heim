@@ -113,13 +113,21 @@ in
     pathsToLink = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ "/bin" ];
-      description = "Paths to link in the resulting profile environment.";
+      description = ''
+        Paths to link in the resulting user profile environment.
+        This option has no effect when using nix-heim as a NixOS module.
+        See <environment.pathsToLink> in NixOS to configure paths to link in user environments.
+      '';
     };
 
     extraOutputsToInstall = lib.mkOption {
       type = lib.types.listOf lib.types.str;
       default = [ ];
-      description = "Extra outputs to install for packages in the resulting profile environment.";
+      description = ''
+        Extra outputs to install for packages in the resulting user profile environment.
+        This option has no effect when using nix-heim as a NixOS module.
+        See <environment.extraOutputsToInstall> in NixOS to configure extra outputs in user environments.
+      '';
     };
 
     overwrite = mkOption {
