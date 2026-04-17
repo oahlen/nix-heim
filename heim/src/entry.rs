@@ -1,9 +1,9 @@
-use std::{fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
 
+use anyhow::anyhow;
 use log::{error, warn};
-use serde::Deserialize;
+use tinyjson::JsonValue;
 
-#[derive(Debug, Deserialize)]
 pub struct Entry {
     pub source: PathBuf,
     pub target: PathBuf,
@@ -11,6 +11,34 @@ pub struct Entry {
 }
 
 impl Entry {
+    pub fn from_json(value: &JsonValue) -> anyhow::Result<Entry> {
+        let obj: &HashMap<String, JsonValue> = value
+            .get()
+            .ok_or_else(|| anyhow!("Expected file entry to be a JSON object"))?;
+
+        let source = obj
+            .get("source")
+            .and_then(|v| v.get::<String>())
+            .ok_or_else(|| anyhow!("Missing or invalid 'source' field in file entry"))?;
+
+        let target = obj
+            .get("target")
+            .and_then(|v| v.get::<String>())
+            .ok_or_else(|| anyhow!("Missing or invalid 'target' field in file entry"))?;
+
+        let overwrite = obj
+            .get("overwrite")
+            .and_then(|v| v.get::<bool>())
+            .copied()
+            .unwrap_or(false);
+
+        Ok(Entry {
+            source: PathBuf::from(source),
+            target: PathBuf::from(target),
+            overwrite,
+        })
+    }
+
     pub fn install(&self) {
         if let Some(parent) = self.target.parent() {
             match fs::create_dir_all(parent) {

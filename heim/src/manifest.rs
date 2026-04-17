@@ -6,16 +6,15 @@ use std::{
 
 use anyhow::{Context, anyhow};
 use log::debug;
-use serde::Deserialize;
+use tinyjson::JsonValue;
 
 use crate::{
     entry::Entry,
     utils::{home, xdg_state_home},
 };
 
-#[derive(Debug, Deserialize, Default)]
+#[derive(Default)]
 pub struct Manifest {
-    #[serde(default)]
     pub files: Vec<Entry>,
     pub version: i32,
 }
@@ -27,6 +26,37 @@ pub struct ManifestDelta<'a> {
 }
 
 impl Manifest {
+    fn from_json(value: &JsonValue) -> anyhow::Result<Manifest> {
+        let obj: &HashMap<String, JsonValue> = value
+            .get()
+            .ok_or_else(|| anyhow!("Expected manifest to be a JSON object"))?;
+
+        let version = obj
+            .get("version")
+            .and_then(|v| v.get::<f64>())
+            .map(|v| *v as i32)
+            .ok_or_else(|| anyhow!("Missing or invalid 'version' field in manifest"))?;
+
+        let files = match obj.get("files") {
+            Some(arr_value) => {
+                let arr: &Vec<JsonValue> = arr_value
+                    .get()
+                    .ok_or_else(|| anyhow!("'files' field must be a JSON array"))?;
+
+                arr.iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        Entry::from_json(v)
+                            .with_context(|| format!("Failed to parse file entry at index {i}"))
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+            }
+            None => Vec::new(),
+        };
+
+        Ok(Manifest { files, version })
+    }
+
     pub fn load(path: &Path) -> anyhow::Result<Manifest> {
         Manifest::load_internal(path, false)
     }
@@ -46,7 +76,11 @@ impl Manifest {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
-        let manifest: Manifest = serde_json::from_str(&content)
+        let json: JsonValue = content
+            .parse()
+            .map_err(|e| anyhow!("Failed to parse manifest: {}: {e}", path.display()))?;
+
+        let manifest = Manifest::from_json(&json)
             .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
 
         debug!(
