@@ -59,6 +59,7 @@
 
         relativeTo = mkOption {
           internal = true;
+          visible = false;
           type = types.path;
           default = rootDir;
           description = "Path that installed symlinks are relative to.";
