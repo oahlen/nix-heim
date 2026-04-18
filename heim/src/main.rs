@@ -3,13 +3,15 @@ use log::{Level, Metadata, Record, warn};
 use crate::{
     action::Action,
     args::{ActionType, Args},
+    state::State,
 };
 
 mod action;
 mod args;
 mod entry;
 mod manifest;
-mod utils;
+mod state;
+mod tests;
 
 struct SimpleLogger;
 
@@ -39,7 +41,11 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     match args.action {
-        ActionType::Activate { manifest } => Action::new(manifest, args.dry_run)?.activate(),
-        ActionType::Deactivate { manifest } => Action::new(manifest, args.dry_run)?.deactivate(),
+        ActionType::Activate { manifest } => {
+            Action::new(manifest, args.dry_run, State::create()?)?.activate()
+        }
+        ActionType::Deactivate { manifest } => {
+            Action::new(manifest, args.dry_run, State::create()?)?.deactivate()
+        }
     }
 }

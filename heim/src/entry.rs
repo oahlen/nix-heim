@@ -32,11 +32,19 @@ impl Entry {
             .copied()
             .unwrap_or(false);
 
-        Ok(Entry {
-            source: PathBuf::from(source),
-            target: PathBuf::from(target),
+        Ok(Entry::new(
+            PathBuf::from(source),
+            PathBuf::from(target),
             overwrite,
-        })
+        ))
+    }
+
+    pub fn new(source: PathBuf, target: PathBuf, overwrite: bool) -> Entry {
+        Entry {
+            source,
+            target,
+            overwrite,
+        }
     }
 
     pub fn install(&self) {
@@ -110,5 +118,105 @@ impl Display for Entry {
             &self.source.display(),
             &self.target.display()
         )
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::fs::{self};
+
+    use crate::tests::tests::{test_dir, write_file};
+
+    #[test]
+    fn install_and_uninstall_works() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+
+        let target_dir = base.join("target");
+        let target = target_dir.join("source.txt");
+
+        // Act
+        let entry = Entry::new(source.clone(), target.clone(), false);
+
+        // Assert
+        assert!(!entry.is_installed());
+
+        // Act
+        entry.install();
+
+        // Assert
+        assert!(target.is_symlink());
+        assert!(entry.is_installed());
+
+        // Act
+        entry.uninstall();
+
+        // Assert
+        assert!(!target.exists());
+    }
+
+    #[test]
+    fn is_installed_false_for_regular_file() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = write_file(&base, "target.txt", "target");
+
+        // Act
+        let entry = Entry::new(source, target, false);
+
+        // Assert
+        assert!(!entry.is_installed());
+    }
+
+    #[test]
+    fn target_exists_true_for_existing_file() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = write_file(&base, "target.txt", "target");
+
+        // Act
+        let entry = Entry::new(source, target.clone(), false);
+
+        // Assert
+        assert!(entry.target_exists());
+    }
+
+    #[test]
+    fn install_replaces_existing_on_overwrite() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = write_file(&base, "target.txt", "target");
+
+        // Act
+        let entry = Entry::new(source, target.clone(), true);
+        entry.install();
+
+        // Assert
+        assert!(target.is_symlink());
+        assert!(entry.is_installed());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "src");
+    }
+
+    #[test]
+    fn install_skips_existing_on_no_overwrite() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = write_file(&base, "target.txt", "target");
+
+        // Act
+        let entry = Entry::new(source, target.clone(), false);
+        entry.install();
+
+        // Assert
+        assert!(!target.is_symlink());
+        assert!(!entry.is_installed());
+        assert_eq!(fs::read_to_string(&target).unwrap(), "target");
     }
 }
