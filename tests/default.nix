@@ -8,7 +8,11 @@ let
 in
 nix-heim pkgs [
   (
-    { pkgs, ... }:
+    {
+      lib,
+      pkgs,
+      ...
+    }:
     {
       overwrite = true;
 
@@ -27,6 +31,11 @@ nix-heim pkgs [
       xdg.config.files = {
         "foobar/foobar_1.txt".source = ./files/file;
         "foobar/foobar_2.txt".text = "foobar";
+        "foobar/foobar_3.txt".text = lib.generators.toINI { } {
+          main = {
+            foo = "bar";
+          };
+        };
       };
 
       packages = [ pkgs.htop ];
