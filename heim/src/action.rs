@@ -47,7 +47,7 @@ impl Action {
             if entry.target_exists() {
                 debug!("Removing entry {}", entry);
                 if !self.dry_run {
-                    entry.uninstall();
+                    entry.uninstall()?;
                 }
             } else {
                 trace!(
@@ -66,7 +66,7 @@ impl Action {
                 info!("Installing entry {}", entry);
 
                 if !self.dry_run {
-                    entry.install();
+                    entry.install()?;
                 }
             }
         }
@@ -116,11 +116,11 @@ impl Action {
 
         // Make sure to also remove all untracked files from the previous manifest
         for entry in &delta.remove {
-            uninstall_entry(entry, self.dry_run);
+            uninstall_entry(entry, self.dry_run)?;
         }
 
         for entry in manifest.files {
-            uninstall_entry(&entry, self.dry_run);
+            uninstall_entry(&entry, self.dry_run)?;
         }
 
         if !self.dry_run {
@@ -138,14 +138,16 @@ impl Action {
     }
 }
 
-fn uninstall_entry(entry: &Entry, dry_run: bool) {
+fn uninstall_entry(entry: &Entry, dry_run: bool) -> anyhow::Result<()> {
     if entry.is_installed() {
         info!("Uninstalling entry {}", entry);
 
         if !dry_run {
-            entry.uninstall();
+            entry.uninstall()?;
         }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
 
 use anyhow::anyhow;
-use log::{error, warn};
+use log::warn;
 use tinyjson::JsonValue;
 
 pub struct Entry {
@@ -47,51 +47,21 @@ impl Entry {
         }
     }
 
-    pub fn install(&self) {
+    pub fn install(&self) -> anyhow::Result<()> {
         if let Some(parent) = self.target.parent() {
-            match fs::create_dir_all(parent) {
-                Ok(_) => {}
-                Err(err) => {
-                    error!(
-                        "Failed to create parent directory {}: {}",
-                        parent.display(),
-                        err
-                    );
-                    return;
-                }
-            }
+            fs::create_dir_all(parent)?;
         }
 
         if self.target_exists() && self.overwrite {
             warn!("Overwriting existing file {}", self.target.display());
-
-            match fs::remove_file(&self.target) {
-                Ok(_) => {}
-                Err(err) => {
-                    error!(
-                        "Failed to remove existing file {}: {}",
-                        self.target.display(),
-                        err
-                    );
-                }
-            }
+            fs::remove_file(&self.target)?;
         }
 
-        match unix_fs::symlink(&self.source, &self.target) {
-            Ok(_) => {}
-            Err(err) => {
-                error!("Failed to create symlink {}: {}", self, err);
-            }
-        }
+        Ok(unix_fs::symlink(&self.source, &self.target)?)
     }
 
-    pub fn uninstall(&self) {
-        match fs::remove_file(&self.target) {
-            Ok(_) => {}
-            Err(err) => {
-                error!("Failed to remove symlink {}: {}", self, err);
-            }
-        }
+    pub fn uninstall(&self) -> anyhow::Result<()> {
+        Ok(fs::remove_file(&self.target)?)
     }
 
     pub fn target_exists(&self) -> bool {
@@ -145,14 +115,14 @@ mod tests {
         assert!(!entry.is_installed());
 
         // Act
-        entry.install();
+        entry.install().unwrap();
 
         // Assert
         assert!(target.is_symlink());
         assert!(entry.is_installed());
 
         // Act
-        entry.uninstall();
+        entry.uninstall().unwrap();
 
         // Assert
         assert!(!target.exists());
@@ -195,7 +165,7 @@ mod tests {
 
         // Act
         let entry = Entry::new(source, target.clone(), true);
-        entry.install();
+        entry.install().unwrap();
 
         // Assert
         assert!(target.is_symlink());
@@ -204,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn install_skips_existing_on_no_overwrite() {
+    fn install_fails_on_existing_on_no_overwrite() {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "src");
@@ -212,9 +182,11 @@ mod tests {
 
         // Act
         let entry = Entry::new(source, target.clone(), false);
-        entry.install();
+        let result = entry.install();
 
         // Assert
+        assert!(result.is_err());
+
         assert!(!target.is_symlink());
         assert!(!entry.is_installed());
         assert_eq!(fs::read_to_string(&target).unwrap(), "target");
