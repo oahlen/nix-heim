@@ -138,6 +138,17 @@ fn validate(entry: &Entry, home: &PathBuf) -> anyhow::Result<()> {
         ));
     }
 
+    if entry
+        .target
+        .components()
+        .any(|c| c == std::path::Component::ParentDir)
+    {
+        return Err(anyhow!(
+            "Target path must not use relative path traversal: {}",
+            entry.target.display()
+        ));
+    }
+
     if !entry.target.starts_with(home) {
         return Err(anyhow!(
             "Target path must be contained in user home directory: {}",
@@ -388,6 +399,18 @@ mod tests {
     fn validate_returns_error_when_source_is_not_a_file() {
         // Arrange
         let entry = make_entry("/nonexistent/path", "/home/user/target");
+        let home = PathBuf::from("/home/user");
+
+        // Act + Assert
+        assert!(validate(&entry, &home).is_err());
+    }
+
+    #[test]
+    fn validate_returns_error_when_target_has_relative_component() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "content");
+        let entry = Entry::new(source, PathBuf::from("/home/user/../../etc/target"), false);
         let home = PathBuf::from("/home/user");
 
         // Act + Assert
