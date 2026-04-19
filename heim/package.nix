@@ -1,4 +1,8 @@
-{ lib, rustPlatform }:
+{
+  doCheck ? true,
+  lib,
+  rustPlatform,
+}:
 let
   fs = lib.fileset;
   sourceFiles = fs.unions [
@@ -18,6 +22,8 @@ rustPlatform.buildRustPackage {
   };
 
   cargoLock.lockFile = ./Cargo.lock;
+
+  inherit doCheck;
 
   meta.mainProgram = "heim";
 }

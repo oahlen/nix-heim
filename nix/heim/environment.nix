@@ -19,7 +19,7 @@ let
 
   manifest = callPackage ./manifest.nix { inherit files; };
 
-  linker = callPackage ../../heim/package.nix { };
+  linker = callPackage ../../heim/package.nix { doCheck = false; };
 
   activate = writeShellScriptBin "heim-activate" ''
     ${getExe linker} activate ${manifest}
