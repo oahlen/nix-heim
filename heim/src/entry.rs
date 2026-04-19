@@ -55,6 +55,9 @@ impl Entry {
         if self.target_exists() && self.overwrite {
             warn!("Overwriting existing file {}", self.target.display());
             fs::remove_file(&self.target)?;
+        } else if self.is_stale_symlink() {
+            warn!("Overwriting stale symlink {}", self.target.display());
+            fs::remove_file(&self.target)?;
         }
 
         Ok(unix_fs::symlink(&self.source, &self.target)?)
@@ -77,6 +80,10 @@ impl Entry {
             Ok(current) => current == *self.source,
             Err(_) => false,
         }
+    }
+
+    fn is_stale_symlink(&self) -> bool {
+        self.target_exists() && !self.is_installed() && self.target.is_symlink()
     }
 }
 
@@ -154,6 +161,23 @@ mod tests {
 
         // Assert
         assert!(entry.target_exists());
+    }
+
+    #[test]
+    fn detects_is_broken_symlink() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = base.join("target.txt");
+
+        // Create broken symlink
+        std::os::unix::fs::symlink(base.join("non_existing_file"), &target).unwrap();
+
+        // Act
+        let entry = Entry::new(source, target.clone(), false);
+
+        // Assert
+        assert!(entry.is_stale_symlink());
     }
 
     #[test]
