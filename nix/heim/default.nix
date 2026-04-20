@@ -9,11 +9,14 @@ let
   evaluated = lib.evalModules {
     class = "heim";
 
-    specialArgs = {
-      inherit pkgs lib;
-    }
-    // specialArgs;
+    inherit specialArgs;
+
     modules = [
+      {
+        _module.args = {
+          inherit pkgs lib;
+        };
+      }
       ./modules/user.nix
     ]
     ++ modules;

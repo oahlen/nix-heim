@@ -36,7 +36,7 @@ pkgs.nixos [
           };
 
           xdg.config.files = {
-            "foobar/foobar_1.txt".source = ./files/file;
+            "foobar/foobar_1.txt".source = ./files/file_1;
             "foobar/foobar_2.txt".text = "foobar";
           };
         };

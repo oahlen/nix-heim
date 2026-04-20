@@ -22,7 +22,7 @@ let
       {
         imports = [ ../heim/modules/user.nix ] ++ global.config.heim.sharedModules;
         config._module.args = {
-          inherit lib pkgs;
+          inherit pkgs lib;
         };
       }
     );

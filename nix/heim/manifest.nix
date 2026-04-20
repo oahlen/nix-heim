@@ -54,46 +54,44 @@ let
     let
       targetRoot = joinTarget file.relativeTo file.target;
 
-      sourcePath =
-        if file.source == null && file.text == null then
-          throw "files.${name} must define either source or text."
-        else if file.source != null && file.text != null then
-          throw "files.${name} must not define both source and text."
-        else if file.source == null then
-          writeText (lib.strings.sanitizeDerivationName name) file.text
-        else
-          file.source;
-
-      checkedSourcePath =
-        if lib.isDerivation sourcePath || builtins.pathExists sourcePath then
-          sourcePath
-        else
-          throw "files.${name}.source does not exist: ${toString sourcePath}";
+      variants = concatLists (
+        mapAttrsToList (name: file: [
+          {
+            inherit name;
+            source = toString file.resolvedSource;
+          }
+        ]) file.variants
+      );
 
       mkEntry = target: source: {
-        source = toString source; # Early toString avoids coercing linked source file into the nix store
-        inherit target;
+        source = toString source;
+        inherit target variants;
         inherit (file) overwrite;
       };
 
-      isDir =
-        !lib.isDerivation checkedSourcePath && builtins.readFileType checkedSourcePath == "directory";
+      entries =
+        if file.isDirectory && builtins.attrNames file.variants != [ ] then
+          throw "files.${name} is a directory and cannot have variants."
+        else if file.isDirectory then
+          map (entry: mkEntry (joinTarget targetRoot entry.relative) entry.source) (
+            listFilesRecursive "" file.resolvedSource
+          )
+        else
+          [ (mkEntry targetRoot file.resolvedSource) ];
+
     in
-    if isDir then
-      map (entry: mkEntry (joinTarget targetRoot entry.relative) entry.source) (
-        listFilesRecursive "" checkedSourcePath
-      )
-    else
-      [ (mkEntry targetRoot checkedSourcePath) ];
+    entries;
 
   expandFiles =
     files:
     let
-      expandedFileSets = concatMap (
-        fileSet: mapAttrsToList expandFile (filterAttrs (_: file: file.enable) fileSet)
-      ) files;
+      expandFileSets =
+        files:
+        concatMap (fileSet: mapAttrsToList expandFile (filterAttrs (_: file: file.enable) fileSet)) files;
+
+      sortFiles = files: builtins.sort (a: b: builtins.lessThan a.target b.target) files;
     in
-    concatLists expandedFileSets;
+    sortFiles (concatLists (expandFileSets files));
 
   validate =
     files:

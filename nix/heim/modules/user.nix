@@ -1,6 +1,7 @@
 {
   config,
   lib,
+  pkgs,
   ...
 }:
 let
@@ -13,12 +14,13 @@ let
 
   inherit (import ./file.nix) mkFileModule;
 
-  mkFileModuleWithRoot =
-    rootDir:
-    mkFileModule {
+  mkFileModuleWithRoot = rootDir: [
+    { _module.args = { inherit pkgs; }; }
+    (mkFileModule {
       inherit rootDir;
       inherit (config) overwrite;
-    };
+    })
+  ];
 
   assertAbsolutePath =
     x: option: throwIfNot (hasPrefix "/" x) "Relative path '${x}' cannot be used for ${option}" x;
