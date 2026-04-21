@@ -39,9 +39,9 @@ pkgs.nixos [
             "foobar/foobar_1.txt".source = ./files/file_1;
             "foobar/foobar_2.txt".text = "foobar";
           };
-        };
 
-        packages = [ pkgs.htop ];
+          packages = [ pkgs.htop ];
+        };
       };
     }
   )

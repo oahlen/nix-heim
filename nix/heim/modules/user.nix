@@ -32,7 +32,7 @@ in
         type = types.str;
         description = ''
           Home directory of the user.
-          When using nix-heim as a nixos module will by default set to `users.users.<name>.home`.
+          When using nix-heim as a nixos module it will by default be set to `users.users.<name>.home`.
         '';
         apply = x: assertAbsolutePath x "<home.directory>";
       };

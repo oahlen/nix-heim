@@ -22,7 +22,7 @@ let
       {
         imports = [ ../heim/modules/user.nix ] ++ global.config.heim.sharedModules;
         config._module.args = {
-          inherit pkgs lib;
+          inherit pkgs;
         };
       }
     );
@@ -34,8 +34,8 @@ let
       options = {
         heim = mkOption {
           description = "Nix-heim configuration";
-          type = types.nullOr heimModule;
-          default = null;
+          type = heimModule;
+          default = { };
         };
       };
 
@@ -45,8 +45,10 @@ let
         packages =
           let
             environment = callPackage ../heim/environment.nix { inherit (config.heim) files; };
+            hasFiles = builtins.any (fileSet: fileSet != { }) config.heim.files;
+            hasPackages = config.heim.packages != [ ];
           in
-          mkIf (config.heim != null) (
+          mkIf (hasFiles || hasPackages) (
             with environment;
             [
               linker
