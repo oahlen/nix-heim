@@ -27,9 +27,9 @@ let
   environment = callPackage ./environment.nix {
     inherit (cfg)
       files
-      extraOutputsToInstall
-      pathsToLink
       packages
+      pathsToLink
+      extraOutputsToInstall
       ;
   };
 

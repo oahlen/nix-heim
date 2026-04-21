@@ -80,7 +80,7 @@
           internal = true;
           visible = false;
           type = types.bool;
-          description = "True if this entrys resolved source is a directory.";
+          description = "True if the resolved source of this entry is a directory.";
         };
       };
 
