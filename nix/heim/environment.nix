@@ -22,11 +22,11 @@ let
   linker = callPackage ../../heim/package.nix { doCheck = false; };
 
   activate = writeShellScriptBin "heim-activate" ''
-    ${getExe linker} activate ${manifest}
+    ${getExe linker} activate ${manifest} "$@"
   '';
 
   deactivate = writeShellScriptBin "heim-deactivate" ''
-    ${getExe linker} deactivate ${manifest}
+    ${getExe linker} deactivate ${manifest} "$@"
   '';
 
   nixCommand = "${getExe nix} --extra-experimental-features \"nix-command\"";
