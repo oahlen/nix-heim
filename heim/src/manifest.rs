@@ -11,10 +11,12 @@ use tinyjson::JsonValue;
 use crate::entry::Entry;
 use crate::state::State;
 
+const SUPPORTED_VERSION: u32 = 1;
+
 #[derive(Default)]
 pub struct Manifest {
     pub files: Vec<Entry>,
-    pub version: i32,
+    pub version: u32,
 }
 
 pub struct ManifestDelta<'a> {
@@ -32,8 +34,17 @@ impl Manifest {
         let version = obj
             .get("version")
             .and_then(|v| v.get::<f64>())
-            .map(|v| *v as i32)
+            .map(|v| *v as u32)
             .ok_or_else(|| anyhow!("Missing or invalid 'version' field in manifest"))?;
+
+        // Perform version check early since we don't know about future changes to the manifest
+        if version > SUPPORTED_VERSION {
+            return Err(anyhow!(
+                "Version in supplied manifest is greater than the supported version: {} > {}",
+                version,
+                SUPPORTED_VERSION
+            ));
+        }
 
         let files = match obj.get("files") {
             Some(arr_value) => {
@@ -229,7 +240,7 @@ mod tests {
     #[test]
     fn from_json_parses_files() {
         // Arrange
-        let json: JsonValue = r#"{"version": 2, "files": [
+        let json: JsonValue = r#"{"version": 1, "files": [
             {"source": "/nix/store/abc/foo", "target": "/home/user/.config/foo", "overwrite": true}
         ]}"#
         .parse()
@@ -239,7 +250,7 @@ mod tests {
         let manifest = Manifest::from_json(&json).unwrap();
 
         // Assert
-        assert_eq!(manifest.version, 2);
+        assert_eq!(manifest.version, 1);
         assert_eq!(manifest.files.len(), 1);
         assert_eq!(
             manifest.files[0].source,
@@ -284,6 +295,17 @@ mod tests {
     fn from_json_returns_error_when_version_missing() {
         // Arrange
         let json: JsonValue = r#"{"files": []}"#.parse().unwrap();
+
+        // Act + Assert
+        assert!(Manifest::from_json(&json).is_err());
+    }
+
+    #[test]
+    fn from_json_returns_error_when_version_greater_than_supported() {
+        // Arrange
+        let json: JsonValue = format!(r#"{{"version": {}}}"#, SUPPORTED_VERSION + 1)
+            .parse()
+            .unwrap();
 
         // Act + Assert
         assert!(Manifest::from_json(&json).is_err());
