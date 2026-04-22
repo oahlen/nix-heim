@@ -54,6 +54,12 @@ nix-heim pkgs [
         };
       };
 
+      sessionVariables = {
+        EDITOR = "vim";
+        PAGER = "less";
+        HTOP_PATH = lib.getExe pkgs.htop;
+      };
+
       packages = [ pkgs.htop ];
     }
   )

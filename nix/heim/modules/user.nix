@@ -7,6 +7,7 @@
 let
   inherit (lib)
     hasPrefix
+    mkIf
     mkOption
     throwIfNot
     types
@@ -118,7 +119,7 @@ in
 
     pathsToLink = mkOption {
       type = types.listOf types.str;
-      default = [ "/bin" ];
+      default = [ "/" ];
       description = ''
         Paths to link in the resulting user profile environment.
         This option has no effect when using nix-heim as a NixOS module.
@@ -134,6 +135,20 @@ in
         This option has no effect when using nix-heim as a NixOS module.
         See `environment.extraOutputsToInstall` in NixOS to configure extra outputs in user environments.
       '';
+    };
+
+    sessionVariables = mkOption {
+      type = types.attrsOf types.str;
+      default = { };
+      description = ''
+        Session variables for this user exposed as a POSIX compliant shell script under <profile_path>/share/heim/session-vars.sh that can be sourced as needed.
+        If using nix-heim in standalone mode the path '/share' must be included in `pathsToLink` for the script to be included.
+      '';
+
+      example = {
+        EDITOR = "vim";
+        PAGER = "less";
+      };
     };
 
     overwrite = mkOption {
@@ -153,10 +168,16 @@ in
     };
   };
 
-  config.files = [
-    config.home.files
-    config.xdg.config.files
-    config.xdg.data.files
-    config.xdg.state.files
-  ];
+  config = {
+    files = [
+      config.home.files
+      config.xdg.config.files
+      config.xdg.data.files
+      config.xdg.state.files
+    ];
+
+    packages = mkIf (config.sessionVariables != { }) [
+      (pkgs.callPackage ../session-vars.nix { inherit (config) sessionVariables; })
+    ];
+  };
 }
