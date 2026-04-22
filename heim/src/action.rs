@@ -58,7 +58,7 @@ impl Action {
         }
 
         for entry in &delta.skip {
-            debug!("Skipping unchanged entry {}", entry);
+            trace!("Skipping unchanged entry {}", entry);
         }
 
         for entry in &delta.install {

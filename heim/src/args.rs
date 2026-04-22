@@ -8,7 +8,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub struct Args {
     pub action: ActionType,
     pub dry_run: bool,
-    verbosity: u8,
+    pub verbosity: u8,
 }
 
 pub enum ActionType {
@@ -31,7 +31,8 @@ impl Args {
         if self.dry_run {
             return match self.verbosity {
                 3 => LevelFilter::Trace,
-                _ => LevelFilter::Debug,
+                2 => LevelFilter::Debug,
+                _ => LevelFilter::Info,
             };
         }
 

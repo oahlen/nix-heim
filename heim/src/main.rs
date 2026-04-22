@@ -1,4 +1,4 @@
-use log::{Level, Metadata, Record, warn};
+use log::{Metadata, Record, warn};
 
 use crate::{
     action::Action,
@@ -17,7 +17,7 @@ struct SimpleLogger;
 
 impl log::Log for SimpleLogger {
     fn enabled(&self, metadata: &Metadata) -> bool {
-        metadata.level() <= Level::Info
+        metadata.level() <= log::max_level()
     }
 
     fn log(&self, record: &Record) {
