@@ -14,7 +14,7 @@ let
     modules = [
       {
         _module.args = {
-          inherit pkgs lib;
+          inherit pkgs;
         };
       }
       ./modules/user.nix
