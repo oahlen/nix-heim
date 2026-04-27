@@ -30,13 +30,24 @@
         if config.source == null && config.text == null then
           throw "files.\"${name}\"${label} must define either source or text."
         else if config.source != null && config.text != null then
-          throw "files.\"${name}\"${label} must not define both source and text."
+          throw "files.\"${name}\"${label} must define only one of source and text."
         else if config.source == null then
           pkgs.writeText (lib.strings.sanitizeDerivationName name) config.text
         else if !builtins.pathExists config.source then
           throw "files.\"${name}\"${label}.source does not exist: ${toString config.source}"
         else
           config.source;
+
+      resolveRootSource =
+        config:
+        if config.source == null && config.text == null && config.variants == { } then
+          throw "files.\"${name}\" must define either source, text or variants."
+        else if (config.source != null || config.text != null) && config.variants != { } then
+          throw "files.\"${name}\" must define only one of source, text and variants."
+        else if config.variants == { } then
+          resolveSource "" config
+        else
+          null;
 
       resolveVariantSource =
         label: config:
@@ -57,30 +68,32 @@
             ]
           );
           default = null;
-          description = "Source path for the file or directory to install. Mutually exclusive with 'text'.";
+          description = ''
+            Source path for the file or directory to install.
+            Mutually exclusive with 'text' and 'variants'.
+            NOTE that directories are not allowed for file variants.
+          '';
         };
 
         text = mkOption {
           type = types.nullOr types.lines;
           default = null;
-          description = "Contents of installed file. Mutually exclusive with 'source'.";
+          description = ''
+            Contents of installed file.
+            Mutually exclusive with 'source' and 'variants'.
+          '';
         };
 
         resolvedSource = mkOption {
-          type = types.oneOf [
-            types.path
-            types.package
-          ];
+          type = types.nullOr (
+            types.oneOf [
+              types.path
+              types.package
+            ]
+          );
           internal = true;
           visible = false;
           description = "Resolved derivation for source or text.";
-        };
-
-        isDirectory = mkOption {
-          internal = true;
-          visible = false;
-          type = types.bool;
-          description = "True if the resolved source of this entry is a directory.";
         };
       };
 
@@ -108,7 +121,6 @@
           source
           text
           resolvedSource
-          isDirectory
           ;
 
         variants = mkOption {
@@ -118,10 +130,19 @@
               (
                 { name, config, ... }:
                 {
-                  options = sourceOptions;
+                  options = sourceOptions // {
+                    default = mkOption {
+                      type = types.bool;
+                      default = false;
+                      description = ''
+                        Whether this file variant is the default.
+                        Only a single file variant can be set as default.
+                      '';
+                    };
+
+                  };
                   config = {
                     resolvedSource = resolveVariantSource name config;
-                    isDirectory = isDirectory config.resolvedSource;
                   };
                 }
               )
@@ -130,7 +151,16 @@
           default = { };
           description = ''
             Extra file variants that can be installed instead of the default.
-            Applied with the `--profile` when activating the configuration.'';
+            Applied with the `--variant` option when activating the configuration.'';
+        };
+
+        overwrite = mkOption {
+          type = types.bool;
+          default = overwrite;
+          description = ''
+            Whether to overwrite existing file in the target install path.
+            Takes precedence over the globally configured overwrite option.
+          '';
         };
 
         relativeTo = mkOption {
@@ -143,19 +173,17 @@
             x: throwIfNot (hasPrefix "/" x) "Relative path '${x}' cannot be used for files.<path>.relativeTo" x;
         };
 
-        overwrite = mkOption {
+        isDirectory = mkOption {
+          internal = true;
+          visible = false;
           type = types.bool;
-          default = overwrite;
-          description = ''
-            Whether to overwrite existing file in the target install path.
-            Takes precedence over the globally configured overwrite option.
-          '';
+          description = "True if the resolved source of this entry is a directory.";
         };
       };
 
       config = {
-        resolvedSource = resolveSource "" config;
-        isDirectory = isDirectory config.resolvedSource;
+        resolvedSource = resolveRootSource config;
+        isDirectory = if config.resolvedSource != null then isDirectory config.resolvedSource else false;
       };
     };
 }

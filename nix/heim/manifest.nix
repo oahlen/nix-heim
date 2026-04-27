@@ -49,35 +49,51 @@ let
         [ ]
     ) names;
 
+  mkDefaultSources = source: [
+    {
+      name = "default";
+      source = toString source;
+      default = true;
+    }
+  ];
+
+  mkVariantSources =
+    name: file:
+    let
+      variants = mapAttrsToList (name: file: {
+        inherit name;
+        inherit (file) default;
+        source = toString file.resolvedSource;
+      }) file.variants;
+
+      defaults = builtins.filter (v: v.default) variants;
+    in
+    if builtins.length defaults > 1 then
+      throw "Multiple default variants found for files.${name}."
+    else if builtins.length defaults == 0 then
+      throw "No default variant found for files.${name}."
+    else
+      variants;
+
   expandFile =
     name: file:
     let
       targetRoot = joinTarget file.relativeTo file.target;
 
-      variants = concatLists (
-        mapAttrsToList (name: file: [
-          {
-            inherit name;
-            source = toString file.resolvedSource;
-          }
-        ]) file.variants
-      );
-
-      mkEntry = target: source: {
-        source = toString source;
-        inherit target variants;
+      mkEntry = target: sources: {
+        inherit target sources;
         inherit (file) overwrite;
       };
 
       entries =
-        if file.isDirectory && builtins.attrNames file.variants != [ ] then
-          throw "files.${name} is a directory and cannot have variants."
+        if file.resolvedSource == null then
+          [ (mkEntry targetRoot (mkVariantSources name file)) ]
         else if file.isDirectory then
-          map (entry: mkEntry (joinTarget targetRoot entry.relative) entry.source) (
+          map (entry: mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources entry.source)) (
             listFilesRecursive "" file.resolvedSource
           )
         else
-          [ (mkEntry targetRoot file.resolvedSource) ];
+          [ (mkEntry targetRoot (mkDefaultSources file.resolvedSource)) ];
 
     in
     entries;

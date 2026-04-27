@@ -37,9 +37,12 @@ nix-heim pkgs [
 
         # Test file with 2 variants works
         "foobar/foobar_2.txt" = {
-          source = ./files/file_1;
           variants = {
-            dark.source = ./files/file_1;
+            dark = {
+              source = ./files/file_1;
+              default = true;
+            };
+
             light.text = ''
               Content
             '';
