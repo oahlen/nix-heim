@@ -20,17 +20,6 @@ impl Symlink {
         self.target.symlink_metadata().is_ok()
     }
 
-    pub fn is_installed(&self) -> bool {
-        if !self.target.is_symlink() {
-            return false;
-        }
-
-        match fs::read_link(&self.target) {
-            Ok(current) => current == self.source,
-            Err(_) => false,
-        }
-    }
-
     pub fn install(&self) -> anyhow::Result<()> {
         if let Some(parent) = self.target.parent() {
             fs::create_dir_all(parent)?;
@@ -71,7 +60,7 @@ impl Display for Symlink {
 mod tests {
     use super::*;
 
-    use crate::tests::tests::{make_symlink, test_dir, write_file};
+    use crate::tests::tests::{make_symlink, test_dir, verify_symlink, write_file};
 
     #[test]
     fn install_and_uninstall_works() {
@@ -86,34 +75,20 @@ mod tests {
         let entry = Symlink::new(source, target.clone(), false);
 
         // Assert
-        assert!(!entry.is_installed());
+        assert_eq!(verify_symlink(&entry.target, &entry.source), false);
 
         // Act
         entry.install().unwrap();
 
         // Assert
         assert!(target.is_symlink());
-        assert!(entry.is_installed());
+        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
 
         // Act
         entry.uninstall().unwrap();
 
         // Assert
         assert!(!target.exists());
-    }
-
-    #[test]
-    fn is_installed_false_for_regular_file() {
-        // Arrange
-        let base = test_dir();
-        let source = write_file(&base, "source.txt", "src");
-        let target = write_file(&base, "target.txt", "target");
-
-        // Act
-        let entry = Symlink::new(source, target, false);
-
-        // Assert
-        assert!(!entry.is_installed());
     }
 
     #[test]
@@ -143,7 +118,7 @@ mod tests {
 
         // Assert
         assert!(target.is_symlink());
-        assert!(entry.is_installed());
+        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
         assert_eq!(fs::read_to_string(&target).unwrap(), "src");
     }
 
@@ -162,7 +137,7 @@ mod tests {
         assert!(result.is_err());
 
         assert!(!target.is_symlink());
-        assert!(!entry.is_installed());
+        assert_eq!(verify_symlink(&entry.target, &entry.source), false);
         assert_eq!(fs::read_to_string(&target).unwrap(), "target");
     }
 
@@ -181,7 +156,7 @@ mod tests {
 
         // Assert
         assert!(target.is_symlink());
-        assert!(entry.is_installed());
+        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
         assert_eq!(fs::read_to_string(&target).unwrap(), "src");
     }
 }

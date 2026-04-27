@@ -19,8 +19,8 @@ pub struct Manifest {
 }
 
 pub struct ManifestDelta {
-    pub remove: Vec<Symlink>,
-    pub install: Vec<Symlink>,
+    pub remove: Vec<(Symlink, bool)>,
+    pub install: Vec<(Symlink, bool)>,
 }
 
 impl Manifest {
@@ -404,7 +404,7 @@ mod tests {
 
         // Assert
         assert_eq!(delta.install.len(), 1);
-        assert_eq!(*delta.install[0].source, PathBuf::from("/src/new"));
+        assert_eq!(*delta.install[0].0.source, PathBuf::from("/src/new"));
         assert!(delta.remove.is_empty());
     }
 
@@ -441,7 +441,7 @@ mod tests {
 
         // Assert
         assert_eq!(delta.install.len(), 1);
-        assert_eq!(*delta.install[0].source, PathBuf::from("/src/b"));
+        assert_eq!(*delta.install[0].0.source, PathBuf::from("/src/b"));
         assert!(delta.remove.is_empty());
     }
 

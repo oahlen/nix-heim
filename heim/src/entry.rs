@@ -108,16 +108,19 @@ impl FileEntry {
         }
     }
 
-    pub fn to_symlink(&self) -> Symlink {
-        let source = if let Ok(current) = fs::read_link(&self.target)
+    pub fn to_symlink(&self) -> (Symlink, bool) {
+        let (source, installed) = if let Ok(current) = fs::read_link(&self.target)
             && let Some(installed) = self.matches_any(&current)
         {
-            installed
+            (installed, true)
         } else {
-            self.source()
+            (self.source(), false)
         };
 
-        Symlink::new(source.clone(), self.target.clone(), self.overwrite)
+        (
+            Symlink::new(source.clone(), self.target.clone(), self.overwrite),
+            installed,
+        )
     }
 
     fn source(&self) -> &PathBuf {
@@ -173,12 +176,13 @@ mod tests {
         };
 
         // Act
-        let symlink = entry.to_symlink();
+        let (symlink, installed) = entry.to_symlink();
 
         // Assert
         assert_eq!(symlink.source, source);
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.overwrite, entry.overwrite);
+        assert_eq!(installed, false);
     }
 
     #[test]
@@ -210,12 +214,13 @@ mod tests {
         };
 
         // Act
-        let symlink = entry.to_symlink();
+        let (symlink, installed) = entry.to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, new_source);
         assert_eq!(symlink.overwrite, entry.overwrite);
+        assert_eq!(installed, false);
     }
 
     #[test]
@@ -247,12 +252,13 @@ mod tests {
         };
 
         // Act
-        let symlink = entry.to_symlink();
+        let (symlink, installed) = entry.to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, new_source);
         assert_eq!(symlink.overwrite, entry.overwrite);
+        assert_eq!(installed, false);
     }
 
     #[test]
@@ -283,11 +289,12 @@ mod tests {
             variant: Some("unknown".to_string()),
         };
 
-        let symlink = entry.to_symlink();
+        let (symlink, installed) = entry.to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, source);
         assert_eq!(symlink.overwrite, entry.overwrite);
+        assert_eq!(installed, true);
     }
 }

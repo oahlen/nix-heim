@@ -1,7 +1,7 @@
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Context;
-use log::{debug, info, trace, warn};
+use log::{debug, info, warn};
 
 use crate::{
     manifest::{Manifest, copy_manifest, delete_manifest},
@@ -50,22 +50,17 @@ impl Action {
 
         self.pre_flight_check(&delta.install, &delta.remove)?;
 
-        for entry in &delta.remove {
-            if entry.target_exists() {
+        for (entry, installed) in delta.remove {
+            if installed {
                 debug!("Removing entry {}", entry);
                 if !self.dry_run {
                     entry.uninstall()?;
                 }
-            } else {
-                trace!(
-                    "Entry {} specified in previous manifest no longer exists, skipping ...",
-                    entry,
-                )
             }
         }
 
-        for entry in &delta.install {
-            if !entry.is_installed() {
+        for (entry, installed) in &delta.install {
+            if !installed {
                 info!("Installing entry {}", entry);
 
                 if !self.dry_run {
@@ -86,24 +81,29 @@ impl Action {
 
     fn pre_flight_check(
         &self,
-        to_install: &[Symlink],
-        to_remove: &[Symlink],
+        to_install: &[(Symlink, bool)],
+        to_remove: &[(Symlink, bool)],
     ) -> anyhow::Result<()> {
-        let excluded_targets: HashSet<&PathBuf> = to_remove.iter().map(|s| &s.target).collect();
+        let excluded_targets: HashSet<&PathBuf> = to_remove
+            .iter()
+            .filter(|(_, installed)| *installed)
+            .map(|(entry, _)| &entry.target)
+            .collect();
 
         let conflicts: Vec<_> = to_install
             .iter()
-            .filter(|entry| entry.target_exists() && !excluded_targets.contains(&entry.target))
-            .filter(|entry| !entry.overwrite)
+            .filter(|(entry, _)| !excluded_targets.contains(&entry.target))
+            .filter(|(entry, installed)| !installed && entry.target_exists())
+            .filter(|(entry, _)| !entry.overwrite)
             .collect();
 
         if !conflicts.is_empty() {
             let listing: Vec<String> = conflicts
                 .iter()
-                .map(|e| format!("  {}", e.target.display()))
+                .map(|(entry, _)| format!("  {}", entry.target.display()))
                 .collect();
             anyhow::bail!(
-                "Cannot install, the following target files already exist:\n{}",
+                "Cannot perform operation, the following target files already exist and are not tracked by nix-heim:\n{}",
                 listing.join("\n")
             );
         }
@@ -121,14 +121,27 @@ impl Action {
         let manifest = Manifest::load(&self.manifest_path, &self.state.home, &None)?;
         let delta = Manifest::diff(&previous, &manifest);
 
+        self.pre_flight_check(&delta.install, &delta.remove)?;
+
         // Make sure to also remove all untracked files from the previous manifest
-        for entry in &delta.remove {
-            uninstall_entry(entry, self.dry_run)?;
+        for (entry, installed) in delta.remove {
+            if installed {
+                info!("Uninstalling previous entry {}", entry);
+
+                if !self.dry_run {
+                    entry.uninstall()?;
+                }
+            }
         }
 
-        for entry in manifest.files {
-            let symlink = entry.to_symlink();
-            uninstall_entry(&symlink, self.dry_run)?;
+        for (entry, installed) in delta.install {
+            if installed {
+                info!("Uninstalling entry {}", entry);
+
+                if !self.dry_run {
+                    entry.uninstall()?;
+                }
+            }
         }
 
         if !self.dry_run {
@@ -144,18 +157,6 @@ impl Action {
 
         Ok(())
     }
-}
-
-fn uninstall_entry(entry: &Symlink, dry_run: bool) -> anyhow::Result<()> {
-    if entry.is_installed() {
-        info!("Uninstalling entry {}", entry);
-
-        if !dry_run {
-            entry.uninstall()?;
-        }
-    }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -211,7 +212,7 @@ mod tests {
         let symlink = Symlink::new(base.join("source.txt"), existing_target, true);
 
         // Act + Assert
-        assert!(action.pre_flight_check(&[symlink], &[]).is_ok());
+        assert!(action.pre_flight_check(&[(symlink, false)], &[]).is_ok());
     }
 
     #[test]
@@ -220,8 +221,16 @@ mod tests {
         let base = test_dir();
         let action = empty_action(&base);
         let existing_target = write_file(&base, "target.txt", "existing");
-        let install = Symlink::new(base.join("source.txt"), existing_target.clone(), false);
-        let remove = Symlink::new(base.join("source.txt"), existing_target.clone(), false);
+
+        let install = (
+            Symlink::new(base.join("source.txt"), existing_target.clone(), false),
+            false,
+        );
+
+        let remove = (
+            Symlink::new(base.join("source.txt"), existing_target.clone(), false),
+            true,
+        );
 
         // Act + Assert
         assert!(action.pre_flight_check(&[install], &[remove]).is_ok());
@@ -236,7 +245,7 @@ mod tests {
         let symlink = Symlink::new(base.join("source.txt"), existing_target, false);
 
         // Act + Assert
-        assert!(action.pre_flight_check(&[symlink], &[]).is_err());
+        assert!(action.pre_flight_check(&[(symlink, false)], &[]).is_err());
     }
 
     #[test]
