@@ -201,12 +201,11 @@ pub fn copy_manifest(src: &Path, dest: &PathBuf) -> anyhow::Result<()> {
 }
 
 pub fn delete_manifest(path: &PathBuf) -> anyhow::Result<()> {
-    if path.exists() {
-        fs::remove_file(path)
-            .with_context(|| format!("Failed to delete manifest: {}", path.display()))?;
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(e).with_context(|| format!("Failed to delete manifest: {}", path.display())),
     }
-
-    Ok(())
 }
 
 #[cfg(test)]

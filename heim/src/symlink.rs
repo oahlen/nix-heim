@@ -25,15 +25,14 @@ impl Symlink {
             fs::create_dir_all(parent)?;
         }
 
-        if self.target_exists() {
-            if self.target.is_symlink() {
+        if let Ok(meta) = self.target.symlink_metadata() {
+            if meta.is_symlink() {
                 debug!("Overwriting existing symlink {}", self.target.display());
             } else if self.overwrite {
                 warn!("Overwriting existing file {}", self.target.display());
             } else {
                 anyhow::bail!("Unable to install entry {}, another file exists", self)
             }
-
             fs::remove_file(&self.target)?;
         }
 
