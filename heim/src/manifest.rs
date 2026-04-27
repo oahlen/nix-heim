@@ -1,32 +1,30 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
 
 use anyhow::{Context, anyhow};
-use log::debug;
+use log::{debug, warn};
 use tinyjson::JsonValue;
 
-use crate::entry::Entry;
-use crate::state::State;
+use crate::{entry::FileEntry, state::State, symlink::Symlink};
 
 const SUPPORTED_VERSION: u32 = 1;
 
 #[derive(Default)]
 pub struct Manifest {
-    pub files: Vec<Entry>,
+    pub files: Vec<FileEntry>,
     pub version: u32,
 }
 
-pub struct ManifestDelta<'a> {
-    pub remove: Vec<&'a Entry>,
-    pub skip: Vec<&'a Entry>,
-    pub install: Vec<&'a Entry>,
+pub struct ManifestDelta {
+    pub remove: Vec<Symlink>,
+    pub install: Vec<Symlink>,
 }
 
 impl Manifest {
-    fn from_json(value: &JsonValue) -> anyhow::Result<Manifest> {
+    fn from_json(value: &JsonValue, variant: &Option<String>) -> anyhow::Result<Manifest> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected manifest to be a JSON object"))?;
@@ -39,11 +37,11 @@ impl Manifest {
 
         // Perform version check early since we don't know about future changes to the manifest
         if version > SUPPORTED_VERSION {
-            return Err(anyhow!(
+            anyhow::bail!(
                 "Version in supplied manifest is greater than the supported version: {} > {}",
                 version,
                 SUPPORTED_VERSION
-            ));
+            )
         }
 
         let files = match obj.get("files") {
@@ -55,7 +53,7 @@ impl Manifest {
                 arr.iter()
                     .enumerate()
                     .map(|(i, v)| {
-                        Entry::from_json(v)
+                        FileEntry::from_json(v, variant)
                             .with_context(|| format!("Failed to parse file entry at index {i}"))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?
@@ -66,21 +64,31 @@ impl Manifest {
         Ok(Manifest { files, version })
     }
 
-    pub fn load(path: &Path, home: &PathBuf) -> anyhow::Result<Manifest> {
-        Manifest::load_internal(path, home, false)
+    pub fn load(path: &Path, home: &PathBuf, variant: &Option<String>) -> anyhow::Result<Manifest> {
+        Manifest::load_internal(path, home, false, variant)
     }
 
     pub fn load_previous(state: &State) -> anyhow::Result<Manifest> {
         let path = state.previous_manifest()?;
         Ok(if path.exists() {
-            Manifest::load_internal(&path, &state.home, true)
-                .context("Failed to load previously installed manifest")?
+            match Manifest::load_internal(&path, &state.home, true, &None) {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    warn!("Failed to load previously installed manifest: {}", error);
+                    Manifest::default()
+                }
+            }
         } else {
             Manifest::default()
         })
     }
 
-    fn load_internal(path: &Path, home: &PathBuf, lenient: bool) -> anyhow::Result<Manifest> {
+    fn load_internal(
+        path: &Path,
+        home: &PathBuf,
+        lenient: bool,
+        variant: &Option<String>,
+    ) -> anyhow::Result<Manifest> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
@@ -88,7 +96,7 @@ impl Manifest {
             .parse()
             .map_err(|e| anyhow!("Failed to parse manifest: {}: {e}", path.display()))?;
 
-        let manifest = Manifest::from_json(&json)
+        let manifest = Manifest::from_json(&json, variant)
             .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
 
         debug!(
@@ -110,43 +118,35 @@ impl Manifest {
         Ok(manifest)
     }
 
-    pub fn diff<'a>(previous: &'a Manifest, new: &'a Manifest) -> ManifestDelta<'a> {
-        let new_by_target: HashMap<&PathBuf, &Entry> =
+    pub fn diff(previous: &Manifest, new: &Manifest) -> ManifestDelta {
+        let new_by_target: HashMap<&PathBuf, &FileEntry> =
             new.files.iter().map(|e| (&e.target, e)).collect();
-
-        let prev_by_target: HashMap<&PathBuf, &Entry> =
-            previous.files.iter().map(|e| (&e.target, e)).collect();
 
         let to_remove = previous
             .files
             .iter()
             .filter(|e| !new_by_target.contains_key(&e.target))
+            .map(|e| e.to_symlink())
             .collect();
 
-        let mut to_skip = Vec::new();
         let mut to_install = Vec::new();
 
         for entry in &new.files {
-            match prev_by_target.get(&entry.target) {
-                Some(prev) if prev.source == entry.source => to_skip.push(entry),
-                _ => to_install.push(entry),
-            }
+            to_install.push(entry.to_symlink());
         }
 
         ManifestDelta {
             remove: to_remove,
-            skip: to_skip,
             install: to_install,
         }
     }
 }
 
-fn validate(entry: &Entry, home: &PathBuf) -> anyhow::Result<()> {
-    if !entry.source.is_file() {
-        return Err(anyhow!(
-            "Source path must be a file: {}",
-            entry.source.display()
-        ));
+fn validate(entry: &FileEntry, home: &PathBuf) -> anyhow::Result<()> {
+    for e in &entry.sources {
+        if !e.source.is_file() {
+            anyhow::bail!("Source path must be a file: {}", e.source.display());
+        }
     }
 
     if entry
@@ -154,33 +154,31 @@ fn validate(entry: &Entry, home: &PathBuf) -> anyhow::Result<()> {
         .components()
         .any(|c| c == std::path::Component::ParentDir)
     {
-        return Err(anyhow!(
+        anyhow::bail!(
             "Target path must not use relative path traversal: {}",
             entry.target.display()
-        ));
+        );
     }
 
     if !entry.target.starts_with(home) {
-        return Err(anyhow!(
+        anyhow::bail!(
             "Target path must be contained in user home directory: {}",
             entry.target.display()
-        ));
+        );
     }
 
     Ok(())
 }
 
-fn ensure_no_duplicates(entries: &Vec<Entry>) -> anyhow::Result<()> {
-    let mut seen: BTreeMap<&PathBuf, &PathBuf> = BTreeMap::new();
+fn ensure_no_duplicates(entries: &Vec<FileEntry>) -> anyhow::Result<()> {
+    let mut seen: HashSet<&PathBuf> = HashSet::new();
 
     for entry in entries.as_slice() {
-        if let Some(prev_source) = seen.insert(&entry.target, &entry.source) {
-            return Err(anyhow!(
-                "Duplicate targets found {} and {} both target {}",
-                prev_source.display(),
-                entry.source.display(),
+        if !seen.insert(&entry.target) {
+            anyhow::bail!(
+                "Duplicate entries found for target {}",
                 entry.target.display()
-            ));
+            );
         }
     }
 
@@ -216,12 +214,12 @@ mod tests {
     use super::*;
 
     use crate::{
-        entry::Entry,
+        entry::{FileEntry, SourceEntry},
         tests::tests::{test_dir, write_file},
     };
 
-    fn make_entry(source: &str, target: &str) -> Entry {
-        Entry::new(PathBuf::from(source), PathBuf::from(target), false)
+    fn make_entry(source: &str, target: &str) -> FileEntry {
+        FileEntry::create(PathBuf::from(source), PathBuf::from(target), false)
     }
 
     #[test]
@@ -230,7 +228,7 @@ mod tests {
         let json: JsonValue = r#"{"version": 1, "files": []}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::from_json(&json, &None).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
@@ -240,20 +238,35 @@ mod tests {
     #[test]
     fn from_json_parses_files() {
         // Arrange
-        let json: JsonValue = r#"{"version": 1, "files": [
-            {"source": "/nix/store/abc/foo", "target": "/home/user/.config/foo", "overwrite": true}
-        ]}"#
+        let json: JsonValue = r#"
+{
+  "version": 1,
+  "files": [
+    {
+      "sources": [
+        {
+          "source": "/nix/store/abc/foo",
+          "name": "default",
+          "default": true
+        }
+      ],
+      "target": "/home/user/.config/foo",
+      "overwrite": true
+    }
+  ]
+}
+"#
         .parse()
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::from_json(&json, &None).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
         assert_eq!(manifest.files.len(), 1);
         assert_eq!(
-            manifest.files[0].source,
+            *manifest.files[0].sources[0].source,
             PathBuf::from("/nix/store/abc/foo")
         );
         assert_eq!(
@@ -266,14 +279,28 @@ mod tests {
     #[test]
     fn from_json_defaults_overwrite_to_false() {
         // Arrange
-        let json: JsonValue = r#"{"version": 1, "files": [
-            {"source": "/src", "target": "/target"}
-        ]}"#
+        let json: JsonValue = r#"
+{
+  "version": 1,
+  "files": [
+    {
+      "sources": [
+        {
+          "source": "/src",
+          "name": "default",
+          "default": true
+        }
+      ],
+      "target": "/target"
+    }
+  ]
+}
+"#
         .parse()
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::from_json(&json, &None).unwrap();
 
         // Assert
         assert!(!manifest.files[0].overwrite);
@@ -285,7 +312,7 @@ mod tests {
         let json: JsonValue = r#"{"version": 1}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::from_json(&json, &None).unwrap();
 
         // Assert
         assert!(manifest.files.is_empty());
@@ -297,7 +324,7 @@ mod tests {
         let json: JsonValue = r#"{"files": []}"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::from_json(&json, &None).is_err());
     }
 
     #[test]
@@ -308,7 +335,7 @@ mod tests {
             .unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::from_json(&json, &None).is_err());
     }
 
     #[test]
@@ -317,7 +344,7 @@ mod tests {
         let json: JsonValue = r#"[]"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::from_json(&json, &None).is_err());
     }
 
     #[test]
@@ -338,7 +365,6 @@ mod tests {
         // Assert
         assert_eq!(delta.remove.len(), 1);
         assert!(delta.install.is_empty());
-        assert!(delta.skip.is_empty());
     }
 
     #[test]
@@ -359,28 +385,6 @@ mod tests {
         // Assert
         assert_eq!(delta.install.len(), 1);
         assert!(delta.remove.is_empty());
-        assert!(delta.skip.is_empty());
-    }
-
-    #[test]
-    fn diff_unchanged_entry_is_skipped() {
-        // Arrange
-        let previous = Manifest {
-            files: vec![make_entry("/src/a", "/target/a")],
-            version: 1,
-        };
-        let new = Manifest {
-            files: vec![make_entry("/src/a", "/target/a")],
-            version: 1,
-        };
-
-        // Act
-        let delta = Manifest::diff(&previous, &new);
-
-        // Assert
-        assert_eq!(delta.skip.len(), 1);
-        assert!(delta.remove.is_empty());
-        assert!(delta.install.is_empty());
     }
 
     #[test]
@@ -400,9 +404,45 @@ mod tests {
 
         // Assert
         assert_eq!(delta.install.len(), 1);
-        assert_eq!(delta.install[0].source, PathBuf::from("/src/new"));
+        assert_eq!(*delta.install[0].source, PathBuf::from("/src/new"));
         assert!(delta.remove.is_empty());
-        assert!(delta.skip.is_empty());
+    }
+
+    #[test]
+    fn diff_entry_with_different_sources_is_reinstalled() {
+        // Arrange
+        let previous = Manifest {
+            files: vec![make_entry("/src/old", "/target/a")],
+            version: 1,
+        };
+        let new = Manifest {
+            files: vec![FileEntry {
+                sources: vec![
+                    SourceEntry {
+                        name: "A".to_string(),
+                        source: PathBuf::from("/src/old"),
+                        default: true,
+                    },
+                    SourceEntry {
+                        name: "B".to_string(),
+                        source: PathBuf::from("/src/b"),
+                        default: false,
+                    },
+                ],
+                target: PathBuf::from("/target/a"),
+                overwrite: true,
+                variant: Some("B".to_string()),
+            }],
+            version: 1,
+        };
+
+        // Act
+        let delta = Manifest::diff(&previous, &new);
+
+        // Assert
+        assert_eq!(delta.install.len(), 1);
+        assert_eq!(*delta.install[0].source, PathBuf::from("/src/b"));
+        assert!(delta.remove.is_empty());
     }
 
     #[test]
@@ -411,7 +451,7 @@ mod tests {
         let base = test_dir();
         let source = write_file(&base, "source.txt", "content");
         let home = PathBuf::from("/home/user");
-        let entry = Entry::new(source, home.join("target.txt"), false);
+        let entry = FileEntry::create(source, home.join("target.txt"), false);
 
         // Act + Assert
         assert!(validate(&entry, &home).is_ok());
@@ -432,7 +472,7 @@ mod tests {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "content");
-        let entry = Entry::new(source, PathBuf::from("/home/user/../../etc/target"), false);
+        let entry = FileEntry::create(source, PathBuf::from("/home/user/../../etc/target"), false);
         let home = PathBuf::from("/home/user");
 
         // Act + Assert
@@ -444,7 +484,7 @@ mod tests {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "content");
-        let entry = Entry::new(source, PathBuf::from("/etc/target"), false);
+        let entry = FileEntry::create(source, PathBuf::from("/etc/target"), false);
         let home = PathBuf::from("/home/user");
 
         // Act + Assert

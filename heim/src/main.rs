@@ -1,4 +1,4 @@
-use log::{Metadata, Record, warn};
+use log::{Metadata, Record, info, warn};
 
 use crate::{
     action::Action,
@@ -11,6 +11,7 @@ mod args;
 mod entry;
 mod manifest;
 mod state;
+mod symlink;
 mod tests;
 
 struct SimpleLogger;
@@ -41,11 +42,15 @@ fn main() -> Result<(), anyhow::Error> {
     }
 
     match args.action {
-        ActionType::Activate { manifest } => {
-            Action::new(manifest, args.dry_run, State::create()?)?.activate()
+        ActionType::Activate { manifest, variant } => {
+            if let Some(val) = &variant {
+                info!("Running activate with variant: {}", val);
+            }
+
+            Action::new(manifest, args.dry_run, State::create()?, variant)?.activate()
         }
         ActionType::Deactivate { manifest } => {
-            Action::new(manifest, args.dry_run, State::create()?)?.deactivate()
+            Action::new(manifest, args.dry_run, State::create()?, None)?.deactivate()
         }
     }
 }

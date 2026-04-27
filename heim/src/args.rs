@@ -12,8 +12,13 @@ pub struct Args {
 }
 
 pub enum ActionType {
-    Activate { manifest: PathBuf },
-    Deactivate { manifest: PathBuf },
+    Activate {
+        manifest: PathBuf,
+        variant: Option<String>,
+    },
+    Deactivate {
+        manifest: PathBuf,
+    },
 }
 
 impl Args {
@@ -48,15 +53,19 @@ impl Args {
 
 fn parse_args() -> Result<Args, lexopt::Error> {
     let mut parser = lexopt::Parser::from_env();
-    let mut dry_run = false;
-    let mut verbosity: u8 = 0;
+
     let mut command: Option<String> = None;
     let mut manifest: Option<PathBuf> = None;
+    let mut variant: Option<String> = None;
+
+    let mut dry_run = false;
+    let mut verbosity: u8 = 0;
 
     while let Some(arg) = parser.next()? {
         match arg {
             Value(val) if command.is_none() => command = Some(val.string()?),
             Value(val) if manifest.is_none() => manifest = Some(val.into()),
+            Long("variant") if variant.is_none() => variant = Some(parser.value()?.string()?),
             Long("dry-run") => dry_run = true,
             Short('v') | Long("verbosity") => verbosity = verbosity.saturating_add(1),
             Short('h') | Long("help") => {
@@ -73,16 +82,17 @@ fn parse_args() -> Result<Args, lexopt::Error> {
 
     verbosity = std::cmp::min(3, verbosity);
 
-    let command = command.ok_or("missing command, expected 'activate' or 'deactivate'")?;
+    let command = command.ok_or("Missing command, expected 'activate' or 'deactivate'")?;
 
     let action = match command.as_str() {
         "activate" => ActionType::Activate {
-            manifest: manifest.ok_or("missing <MANIFEST> path for 'activate'")?,
+            manifest: manifest.ok_or("Missing <MANIFEST> path for 'activate'")?,
+            variant,
         },
         "deactivate" => ActionType::Deactivate {
             manifest: manifest.ok_or("missing <MANIFEST> path for 'deactivate'")?,
         },
-        other => return Err(format!("unknown command '{other}'"))?,
+        other => return Err(format!("Unknown command '{other}'"))?,
     };
 
     Ok(Args {
@@ -105,6 +115,9 @@ fn print_help() {
     println!("  <MANIFEST>  Path to the manifest JSON file");
     println!();
     println!("Options:");
+    println!(
+        "      --variant       Installs files with the specified variant if they exist. Only applicable to 'activate'"
+    );
     println!(
         "      --dry-run       Whether to perform a dry run of the specified action. Does not perform any file system operations"
     );

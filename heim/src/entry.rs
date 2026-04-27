@@ -1,30 +1,84 @@
-use std::{collections::HashMap, fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
+use std::{collections::HashMap, fs, path::PathBuf};
 
-use anyhow::anyhow;
-use log::warn;
+use anyhow::{Context, anyhow};
 use tinyjson::JsonValue;
 
-pub struct Entry {
+use crate::symlink::Symlink;
+
+pub struct SourceEntry {
+    pub name: String,
     pub source: PathBuf,
-    pub target: PathBuf,
-    pub overwrite: bool,
+    pub default: bool,
 }
 
-impl Entry {
-    pub fn from_json(value: &JsonValue) -> anyhow::Result<Entry> {
+impl SourceEntry {
+    pub fn from_json(value: &JsonValue) -> anyhow::Result<SourceEntry> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
-            .ok_or_else(|| anyhow!("Expected file entry to be a JSON object"))?;
+            .ok_or_else(|| anyhow!("Expected source entry to be a JSON object"))?;
+
+        let name = obj
+            .get("name")
+            .and_then(|v| v.get::<String>())
+            .ok_or_else(|| anyhow!("Missing or invalid 'name' field in source entry"))?;
 
         let source = obj
             .get("source")
             .and_then(|v| v.get::<String>())
-            .ok_or_else(|| anyhow!("Missing or invalid 'source' field in file entry"))?;
+            .ok_or_else(|| anyhow!("Missing or invalid 'source' field in source entry"))?;
+
+        let default = obj
+            .get("default")
+            .and_then(|v| v.get::<bool>())
+            .copied()
+            .unwrap_or(false);
+
+        Ok(SourceEntry {
+            name: name.to_string(),
+            source: PathBuf::from(source),
+            default,
+        })
+    }
+}
+
+pub struct FileEntry {
+    pub sources: Vec<SourceEntry>,
+    pub target: PathBuf,
+    pub overwrite: bool,
+    pub variant: Option<String>,
+}
+
+impl FileEntry {
+    pub fn from_json(value: &JsonValue, variant: &Option<String>) -> anyhow::Result<FileEntry> {
+        let obj: &HashMap<String, JsonValue> = value
+            .get()
+            .ok_or_else(|| anyhow!("Expected file entry to be a JSON object"))?;
 
         let target = obj
             .get("target")
             .and_then(|v| v.get::<String>())
             .ok_or_else(|| anyhow!("Missing or invalid 'target' field in file entry"))?;
+
+        let sources = match obj.get("sources") {
+            Some(arr_value) => {
+                let arr: &Vec<JsonValue> = arr_value
+                    .get()
+                    .ok_or_else(|| anyhow!("'sources' field must be a JSON array"))?;
+
+                arr.iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        SourceEntry::from_json(v)
+                            .with_context(|| format!("Failed to parse source entry at index {i}"))
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+            }
+            None => Vec::new(),
+        };
+
+        if sources.is_empty() {
+            anyhow::bail!("Found no sources for entry with target {}", target);
+        }
 
         let overwrite = obj
             .get("overwrite")
@@ -32,69 +86,63 @@ impl Entry {
             .copied()
             .unwrap_or(false);
 
-        Ok(Entry::new(
-            PathBuf::from(source),
+        Ok(FileEntry::new(
+            sources,
             PathBuf::from(target),
             overwrite,
+            variant.clone(),
         ))
     }
 
-    pub fn new(source: PathBuf, target: PathBuf, overwrite: bool) -> Entry {
-        Entry {
-            source,
+    pub fn new(
+        sources: Vec<SourceEntry>,
+        target: PathBuf,
+        overwrite: bool,
+        variant: Option<String>,
+    ) -> FileEntry {
+        FileEntry {
+            sources,
             target,
             overwrite,
+            variant,
         }
     }
 
-    pub fn install(&self) -> anyhow::Result<()> {
-        if let Some(parent) = self.target.parent() {
-            fs::create_dir_all(parent)?;
+    pub fn to_symlink(&self) -> Symlink {
+        let source = if let Ok(current) = fs::read_link(&self.target)
+            && let Some(installed) = self.matches_any(&current)
+        {
+            installed
+        } else {
+            self.source()
+        };
+
+        Symlink::new(source.clone(), self.target.clone(), self.overwrite)
+    }
+
+    fn source(&self) -> &PathBuf {
+        let pos = self
+            .variant
+            .as_ref()
+            .and_then(|variant| self.sources.iter().position(|f| &f.name == variant))
+            .or_else(|| self.sources.iter().position(|f| f.default))
+            .unwrap_or(0);
+
+        &self.sources[pos].source
+    }
+
+    fn matches_any(&self, current: &PathBuf) -> Option<&PathBuf> {
+        if let Some(variant) = &self.variant
+            && let Some(index) = self.sources.iter().position(|f| &f.name == variant)
+        {
+            let source = &self.sources[index].source;
+            return (current == source).then_some(source);
         }
 
-        if self.target_exists() && self.overwrite {
-            warn!("Overwriting existing file {}", self.target.display());
-            fs::remove_file(&self.target)?;
-        } else if self.is_stale_symlink() {
-            warn!("Overwriting stale symlink {}", self.target.display());
-            fs::remove_file(&self.target)?;
-        }
-
-        Ok(unix_fs::symlink(&self.source, &self.target)?)
-    }
-
-    pub fn uninstall(&self) -> anyhow::Result<()> {
-        Ok(fs::remove_file(&self.target)?)
-    }
-
-    pub fn target_exists(&self) -> bool {
-        self.target.symlink_metadata().is_ok()
-    }
-
-    pub fn is_installed(&self) -> bool {
-        if !self.target.is_symlink() {
-            return false;
-        }
-
-        match fs::read_link(&self.target) {
-            Ok(current) => current == *self.source,
-            Err(_) => false,
-        }
-    }
-
-    fn is_stale_symlink(&self) -> bool {
-        self.target_exists() && !self.is_installed() && self.target.is_symlink()
-    }
-}
-
-impl Display for Entry {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} -> {}",
-            &self.source.display(),
-            &self.target.display()
-        )
+        self.sources
+            .iter()
+            .find(|f| &f.source == current)
+            .map(|f| &f.source)
     }
 }
 
@@ -102,12 +150,10 @@ impl Display for Entry {
 mod tests {
     use super::*;
 
-    use std::fs::{self};
-
-    use crate::tests::tests::{test_dir, write_file};
+    use crate::tests::tests::{make_symlink, test_dir, write_file};
 
     #[test]
-    fn install_and_uninstall_works() {
+    fn to_symlink_works() {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "src");
@@ -115,104 +161,133 @@ mod tests {
         let target_dir = base.join("target");
         let target = target_dir.join("source.txt");
 
-        // Act
-        let entry = Entry::new(source.clone(), target.clone(), false);
-
-        // Assert
-        assert!(!entry.is_installed());
-
-        // Act
-        entry.install().unwrap();
-
-        // Assert
-        assert!(target.is_symlink());
-        assert!(entry.is_installed());
+        let entry = FileEntry {
+            sources: vec![SourceEntry {
+                source: source.clone(),
+                name: "Default".to_string(),
+                default: true,
+            }],
+            target: target.clone(),
+            overwrite: false,
+            variant: None,
+        };
 
         // Act
-        entry.uninstall().unwrap();
+        let symlink = entry.to_symlink();
 
         // Assert
-        assert!(!target.exists());
+        assert_eq!(symlink.source, source);
+        assert_eq!(symlink.target, target);
+        assert_eq!(symlink.overwrite, entry.overwrite);
     }
 
     #[test]
-    fn is_installed_false_for_regular_file() {
+    fn to_symlink_selects_correct_variant() {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "src");
-        let target = write_file(&base, "target.txt", "target");
+        let new_source = base.join("source_2");
+
+        let target_dir = base.join("target");
+        let target = target_dir.join("source.txt");
+
+        let entry = FileEntry {
+            sources: vec![
+                SourceEntry {
+                    source: source.clone(),
+                    name: "dark".to_string(),
+                    default: true,
+                },
+                SourceEntry {
+                    source: new_source.clone(),
+                    name: "light".to_string(),
+                    default: false,
+                },
+            ],
+            target: target.clone(),
+            overwrite: false,
+            variant: Some("light".to_string()),
+        };
 
         // Act
-        let entry = Entry::new(source, target, false);
+        let symlink = entry.to_symlink();
 
         // Assert
-        assert!(!entry.is_installed());
+        assert_eq!(symlink.target, target);
+        assert_eq!(symlink.source, new_source);
+        assert_eq!(symlink.overwrite, entry.overwrite);
     }
 
     #[test]
-    fn target_exists_true_for_existing_file() {
+    fn to_symlink_selects_default() {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "src");
-        let target = write_file(&base, "target.txt", "target");
+        let new_source = base.join("source_2");
+
+        let target_dir = base.join("target");
+        let target = target_dir.join("source.txt");
+
+        let entry = FileEntry {
+            sources: vec![
+                SourceEntry {
+                    source: source.clone(),
+                    name: "dark".to_string(),
+                    default: false,
+                },
+                SourceEntry {
+                    source: new_source.clone(),
+                    name: "light".to_string(),
+                    default: true,
+                },
+            ],
+            target: target.clone(),
+            overwrite: false,
+            variant: None,
+        };
 
         // Act
-        let entry = Entry::new(source, target.clone(), false);
+        let symlink = entry.to_symlink();
 
         // Assert
-        assert!(entry.target_exists());
+        assert_eq!(symlink.target, target);
+        assert_eq!(symlink.source, new_source);
+        assert_eq!(symlink.overwrite, entry.overwrite);
     }
 
     #[test]
-    fn detects_is_broken_symlink() {
+    fn to_symlink_selects_already_installed() {
         // Arrange
         let base = test_dir();
         let source = write_file(&base, "source.txt", "src");
-        let target = base.join("target.txt");
 
-        // Create broken symlink
-        std::os::unix::fs::symlink(base.join("non_existing_file"), &target).unwrap();
-
-        // Act
-        let entry = Entry::new(source, target.clone(), false);
-
-        // Assert
-        assert!(entry.is_stale_symlink());
-    }
-
-    #[test]
-    fn install_replaces_existing_on_overwrite() {
-        // Arrange
-        let base = test_dir();
-        let source = write_file(&base, "source.txt", "src");
-        let target = write_file(&base, "target.txt", "target");
+        let target_dir = base.join("target");
+        let target = make_symlink(&target_dir, "source.txt", &source);
 
         // Act
-        let entry = Entry::new(source, target.clone(), true);
-        entry.install().unwrap();
+        let entry = FileEntry {
+            sources: vec![
+                SourceEntry {
+                    source: source.clone(),
+                    name: "dark".to_string(),
+                    default: false,
+                },
+                SourceEntry {
+                    source: base.join("source_2.txt"),
+                    name: "light".to_string(),
+                    default: true,
+                },
+            ],
+            target: target.clone(),
+            overwrite: false,
+            variant: Some("unknown".to_string()),
+        };
+
+        let symlink = entry.to_symlink();
 
         // Assert
-        assert!(target.is_symlink());
-        assert!(entry.is_installed());
-        assert_eq!(fs::read_to_string(&target).unwrap(), "src");
-    }
-
-    #[test]
-    fn install_fails_on_existing_on_no_overwrite() {
-        // Arrange
-        let base = test_dir();
-        let source = write_file(&base, "source.txt", "src");
-        let target = write_file(&base, "target.txt", "target");
-
-        // Act
-        let entry = Entry::new(source, target.clone(), false);
-        let result = entry.install();
-
-        // Assert
-        assert!(result.is_err());
-
-        assert!(!target.is_symlink());
-        assert!(!entry.is_installed());
-        assert_eq!(fs::read_to_string(&target).unwrap(), "target");
+        assert_eq!(symlink.target, target);
+        assert_eq!(symlink.source, source);
+        assert_eq!(symlink.overwrite, entry.overwrite);
     }
 }

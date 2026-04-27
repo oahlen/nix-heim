@@ -1,22 +1,28 @@
 use std::{collections::HashSet, path::PathBuf};
 
-use anyhow::{Context, anyhow};
+use anyhow::Context;
 use log::{debug, info, trace, warn};
 
 use crate::{
-    entry::Entry,
     manifest::{Manifest, copy_manifest, delete_manifest},
     state::State,
+    symlink::Symlink,
 };
 
 pub struct Action {
     manifest_path: PathBuf,
     dry_run: bool,
     state: State,
+    variant: Option<String>,
 }
 
 impl Action {
-    pub fn new(manifest_path: PathBuf, dry_run: bool, state: State) -> anyhow::Result<Action> {
+    pub fn new(
+        manifest_path: PathBuf,
+        dry_run: bool,
+        state: State,
+        variant: Option<String>,
+    ) -> anyhow::Result<Action> {
         let resolved_path = manifest_path.canonicalize().with_context(|| {
             format!(
                 "Failed to resolve manifest path: {}",
@@ -28,6 +34,7 @@ impl Action {
             manifest_path: resolved_path,
             dry_run,
             state,
+            variant,
         })
     }
 
@@ -38,7 +45,7 @@ impl Action {
         );
 
         let previous = Manifest::load_previous(&self.state)?;
-        let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
+        let manifest = Manifest::load(&self.manifest_path, &self.state.home, &self.variant)?;
         let delta = Manifest::diff(&previous, &manifest);
 
         self.pre_flight_check(&delta.install, &delta.remove)?;
@@ -55,10 +62,6 @@ impl Action {
                     entry,
                 )
             }
-        }
-
-        for entry in &delta.skip {
-            trace!("Skipping unchanged entry {}", entry);
         }
 
         for entry in &delta.install {
@@ -81,7 +84,11 @@ impl Action {
         Ok(())
     }
 
-    fn pre_flight_check(&self, to_install: &[&Entry], to_remove: &[&Entry]) -> anyhow::Result<()> {
+    fn pre_flight_check(
+        &self,
+        to_install: &[Symlink],
+        to_remove: &[Symlink],
+    ) -> anyhow::Result<()> {
         let excluded_targets: HashSet<&PathBuf> = to_remove.iter().map(|s| &s.target).collect();
 
         let conflicts: Vec<_> = to_install
@@ -95,10 +102,10 @@ impl Action {
                 .iter()
                 .map(|e| format!("  {}", e.target.display()))
                 .collect();
-            return Err(anyhow!(
+            anyhow::bail!(
                 "Cannot install, the following target files already exist:\n{}",
                 listing.join("\n")
-            ));
+            );
         }
 
         Ok(())
@@ -111,7 +118,7 @@ impl Action {
         );
 
         let previous = Manifest::load_previous(&self.state)?;
-        let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
+        let manifest = Manifest::load(&self.manifest_path, &self.state.home, &None)?;
         let delta = Manifest::diff(&previous, &manifest);
 
         // Make sure to also remove all untracked files from the previous manifest
@@ -120,7 +127,8 @@ impl Action {
         }
 
         for entry in manifest.files {
-            uninstall_entry(&entry, self.dry_run)?;
+            let symlink = entry.to_symlink();
+            uninstall_entry(&symlink, self.dry_run)?;
         }
 
         if !self.dry_run {
@@ -138,7 +146,7 @@ impl Action {
     }
 }
 
-fn uninstall_entry(entry: &Entry, dry_run: bool) -> anyhow::Result<()> {
+fn uninstall_entry(entry: &Symlink, dry_run: bool) -> anyhow::Result<()> {
     if entry.is_installed() {
         info!("Uninstalling entry {}", entry);
 
@@ -157,7 +165,6 @@ mod tests {
     use std::fs;
 
     use crate::{
-        entry::Entry,
         state::State,
         tests::tests::{test_dir, write_file},
     };
@@ -167,7 +174,7 @@ mod tests {
             .iter()
             .map(|(src, tgt)| {
                 format!(
-                    r#"{{"source": "{}", "target": "{}"}}"#,
+                    r#"{{"sources": [{{"source":"{}", "name": "default", "default": true}}], "target": "{}"}}"#,
                     src.display(),
                     tgt.display()
                 )
@@ -182,7 +189,7 @@ mod tests {
     fn empty_action(base: &std::path::Path) -> Action {
         let manifest_path = write_manifest(base, &[]);
         let home = State::new(base.join("home"), base.join("state"));
-        Action::new(manifest_path, false, home).unwrap()
+        Action::new(manifest_path, false, home, None).unwrap()
     }
 
     #[test]
@@ -201,10 +208,10 @@ mod tests {
         let base = test_dir();
         let action = empty_action(&base);
         let existing_target = write_file(&base, "target.txt", "existing");
-        let entry = Entry::new(base.join("source.txt"), existing_target, true);
+        let symlink = Symlink::new(base.join("source.txt"), existing_target, true);
 
         // Act + Assert
-        assert!(action.pre_flight_check(&[&entry], &[]).is_ok());
+        assert!(action.pre_flight_check(&[symlink], &[]).is_ok());
     }
 
     #[test]
@@ -213,10 +220,11 @@ mod tests {
         let base = test_dir();
         let action = empty_action(&base);
         let existing_target = write_file(&base, "target.txt", "existing");
-        let entry = Entry::new(base.join("source.txt"), existing_target, false);
+        let install = Symlink::new(base.join("source.txt"), existing_target.clone(), false);
+        let remove = Symlink::new(base.join("source.txt"), existing_target.clone(), false);
 
         // Act + Assert
-        assert!(action.pre_flight_check(&[&entry], &[&entry]).is_ok());
+        assert!(action.pre_flight_check(&[install], &[remove]).is_ok());
     }
 
     #[test]
@@ -225,10 +233,10 @@ mod tests {
         let base = test_dir();
         let action = empty_action(&base);
         let existing_target = write_file(&base, "target.txt", "existing");
-        let entry = Entry::new(base.join("source.txt"), existing_target, false);
+        let symlink = Symlink::new(base.join("source.txt"), existing_target, false);
 
         // Act + Assert
-        assert!(action.pre_flight_check(&[&entry], &[]).is_err());
+        assert!(action.pre_flight_check(&[symlink], &[]).is_err());
     }
 
     #[test]
@@ -244,7 +252,8 @@ mod tests {
         let manifest_path = write_manifest(&base, &[(source, target.clone())]);
         let new_manifest_path = state.join("heim").join("manifest.json");
 
-        let action = Action::new(manifest_path, false, State::new(home, state.clone())).unwrap();
+        let action =
+            Action::new(manifest_path, false, State::new(home, state.clone()), None).unwrap();
 
         // Act
         let result = action.activate();
@@ -266,8 +275,13 @@ mod tests {
         let target = home.join("target.txt");
         let manifest_path = write_manifest(&base, &[(source, target.clone())]);
 
-        let action =
-            Action::new(manifest_path, true, State::new(home, base.join("state"))).unwrap();
+        let action = Action::new(
+            manifest_path,
+            true,
+            State::new(home, base.join("state")),
+            None,
+        )
+        .unwrap();
 
         // Act
         let result = action.activate();
@@ -288,8 +302,13 @@ mod tests {
         let target = write_file(&home, "target.txt", "existing");
         let manifest_path = write_manifest(&base, &[(source, target)]);
 
-        let action =
-            Action::new(manifest_path, false, State::new(home, base.join("state"))).unwrap();
+        let action = Action::new(
+            manifest_path,
+            false,
+            State::new(home, base.join("state")),
+            None,
+        )
+        .unwrap();
 
         // Act + Assert
         assert!(action.activate().is_err());
@@ -311,7 +330,7 @@ mod tests {
         fs::create_dir_all(&heim_state).unwrap();
         let old_manifest_path = write_manifest(&heim_state, &[]);
 
-        let action = Action::new(manifest_path, false, State::new(home, state)).unwrap();
+        let action = Action::new(manifest_path, false, State::new(home, state), None).unwrap();
         action.activate().unwrap();
         assert!(target.is_symlink());
 
@@ -340,13 +359,14 @@ mod tests {
             manifest_path.clone(),
             false,
             State::new(home.clone(), state.clone()),
+            None,
         )
         .unwrap();
         action.activate().unwrap();
         assert!(target.is_symlink());
 
         // Act
-        let dry_action = Action::new(manifest_path, true, State::new(home, state)).unwrap();
+        let dry_action = Action::new(manifest_path, true, State::new(home, state), None).unwrap();
         let result = dry_action.deactivate();
 
         // Assert
