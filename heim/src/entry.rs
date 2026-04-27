@@ -108,44 +108,35 @@ impl FileEntry {
         }
     }
 
-    pub fn to_symlink(&self) -> (Symlink, bool) {
-        let (source, installed) = if let Ok(current) = fs::read_link(&self.target)
-            && let Some(installed) = self.matches_any(&current)
+    pub fn convert_to_symlink(mut self) -> (Symlink, bool) {
+        let (index, installed) = if let Ok(current) = fs::read_link(&self.target)
+            && let Some(idx) = self.matching_index(&current)
         {
-            (installed, true)
+            (idx, true)
         } else {
-            (self.source(), false)
+            (self.source_index(), false)
         };
 
-        (
-            Symlink::new(source.clone(), self.target.clone(), self.overwrite),
-            installed,
-        )
+        let source = self.sources.swap_remove(index).source;
+        (Symlink::new(source, self.target, self.overwrite), installed)
     }
 
-    fn source(&self) -> &PathBuf {
-        let pos = self
-            .variant
+    fn source_index(&self) -> usize {
+        self.variant
             .as_ref()
             .and_then(|variant| self.sources.iter().position(|f| &f.name == variant))
             .or_else(|| self.sources.iter().position(|f| f.default))
-            .unwrap_or(0);
-
-        &self.sources[pos].source
+            .unwrap_or(0)
     }
 
-    fn matches_any(&self, current: &PathBuf) -> Option<&PathBuf> {
+    fn matching_index(&self, current: &PathBuf) -> Option<usize> {
         if let Some(variant) = &self.variant
             && let Some(index) = self.sources.iter().position(|f| &f.name == variant)
         {
-            let source = &self.sources[index].source;
-            return (current == source).then_some(source);
+            return (current == &self.sources[index].source).then_some(index);
         }
 
-        self.sources
-            .iter()
-            .find(|f| &f.source == current)
-            .map(|f| &f.source)
+        self.sources.iter().position(|f| &f.source == current)
     }
 }
 
@@ -176,12 +167,12 @@ mod tests {
         };
 
         // Act
-        let (symlink, installed) = entry.to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink();
 
         // Assert
         assert_eq!(symlink.source, source);
         assert_eq!(symlink.target, target);
-        assert_eq!(symlink.overwrite, entry.overwrite);
+        assert!(!symlink.overwrite);
         assert_eq!(installed, false);
     }
 
@@ -214,12 +205,12 @@ mod tests {
         };
 
         // Act
-        let (symlink, installed) = entry.to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, new_source);
-        assert_eq!(symlink.overwrite, entry.overwrite);
+        assert!(!symlink.overwrite);
         assert_eq!(installed, false);
     }
 
@@ -252,12 +243,12 @@ mod tests {
         };
 
         // Act
-        let (symlink, installed) = entry.to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, new_source);
-        assert_eq!(symlink.overwrite, entry.overwrite);
+        assert!(!symlink.overwrite);
         assert_eq!(installed, false);
     }
 
@@ -289,12 +280,12 @@ mod tests {
             variant: Some("unknown".to_string()),
         };
 
-        let (symlink, installed) = entry.to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink();
 
         // Assert
         assert_eq!(symlink.target, target);
         assert_eq!(symlink.source, source);
-        assert_eq!(symlink.overwrite, entry.overwrite);
+        assert!(!symlink.overwrite);
         assert_eq!(installed, true);
     }
 }

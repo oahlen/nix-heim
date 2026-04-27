@@ -118,22 +118,19 @@ impl Manifest {
         Ok(manifest)
     }
 
-    pub fn diff(previous: &Manifest, new: &Manifest) -> ManifestDelta {
-        let new_by_target: HashMap<&PathBuf, &FileEntry> =
-            new.files.iter().map(|e| (&e.target, e)).collect();
+    pub fn diff(previous: Manifest, new: Manifest) -> ManifestDelta {
+        let to_remove = {
+            let new_targets: HashSet<&PathBuf> = new.files.iter().map(|e| &e.target).collect();
 
-        let to_remove = previous
-            .files
-            .iter()
-            .filter(|e| !new_by_target.contains_key(&e.target))
-            .map(|e| e.to_symlink())
-            .collect();
+            previous
+                .files
+                .into_iter()
+                .filter(|e| !new_targets.contains(&e.target))
+                .map(|e| e.convert_to_symlink())
+                .collect()
+        };
 
-        let mut to_install = Vec::new();
-
-        for entry in &new.files {
-            to_install.push(entry.to_symlink());
-        }
+        let to_install = new.files.into_iter().map(|e| e.convert_to_symlink()).collect();
 
         ManifestDelta {
             remove: to_remove,
@@ -359,7 +356,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(&previous, &new);
+        let delta = Manifest::diff(previous, new);
 
         // Assert
         assert_eq!(delta.remove.len(), 1);
@@ -379,7 +376,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(&previous, &new);
+        let delta = Manifest::diff(previous, new);
 
         // Assert
         assert_eq!(delta.install.len(), 1);
@@ -399,7 +396,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(&previous, &new);
+        let delta = Manifest::diff(previous, new);
 
         // Assert
         assert_eq!(delta.install.len(), 1);
@@ -436,7 +433,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(&previous, &new);
+        let delta = Manifest::diff(previous, new);
 
         // Assert
         assert_eq!(delta.install.len(), 1);
