@@ -45,11 +45,10 @@ pub struct FileEntry {
     pub sources: Vec<SourceEntry>,
     pub target: PathBuf,
     pub overwrite: bool,
-    pub variant: Option<String>,
 }
 
 impl FileEntry {
-    pub fn from_json(value: &JsonValue, variant: &Option<String>) -> anyhow::Result<FileEntry> {
+    pub fn from_json(value: &JsonValue) -> anyhow::Result<FileEntry> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected file entry to be a JSON object"))?;
@@ -86,51 +85,40 @@ impl FileEntry {
             .copied()
             .unwrap_or(false);
 
-        Ok(FileEntry::new(
-            sources,
-            PathBuf::from(target),
-            overwrite,
-            variant.clone(),
-        ))
+        Ok(FileEntry::new(sources, PathBuf::from(target), overwrite))
     }
 
-    pub fn new(
-        sources: Vec<SourceEntry>,
-        target: PathBuf,
-        overwrite: bool,
-        variant: Option<String>,
-    ) -> FileEntry {
+    pub fn new(sources: Vec<SourceEntry>, target: PathBuf, overwrite: bool) -> FileEntry {
         FileEntry {
             sources,
             target,
             overwrite,
-            variant,
         }
     }
 
-    pub fn convert_to_symlink(mut self) -> (Symlink, bool) {
+    pub fn convert_to_symlink(mut self, variant: &Option<String>) -> (Symlink, bool) {
         let (index, installed) = if let Ok(current) = fs::read_link(&self.target)
-            && let Some(idx) = self.matching_index(&current)
+            && let Some(idx) = self.matching_index(&current, variant)
         {
             (idx, true)
         } else {
-            (self.source_index(), false)
+            (self.source_index(variant), false)
         };
 
         let source = self.sources.swap_remove(index).source;
         (Symlink::new(source, self.target, self.overwrite), installed)
     }
 
-    fn source_index(&self) -> usize {
-        self.variant
+    fn source_index(&self, variant: &Option<String>) -> usize {
+        variant
             .as_ref()
             .and_then(|variant| self.sources.iter().position(|f| &f.name == variant))
             .or_else(|| self.sources.iter().position(|f| f.default))
             .unwrap_or(0)
     }
 
-    fn matching_index(&self, current: &PathBuf) -> Option<usize> {
-        if let Some(variant) = &self.variant
+    fn matching_index(&self, current: &PathBuf, variant: &Option<String>) -> Option<usize> {
+        if let Some(variant) = variant
             && let Some(index) = self.sources.iter().position(|f| &f.name == variant)
         {
             return (current == &self.sources[index].source).then_some(index);
@@ -163,11 +151,10 @@ mod tests {
             }],
             target: target.clone(),
             overwrite: false,
-            variant: None,
         };
 
         // Act
-        let (symlink, installed) = entry.convert_to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink(&None);
 
         // Assert
         assert_eq!(symlink.source, source);
@@ -201,11 +188,10 @@ mod tests {
             ],
             target: target.clone(),
             overwrite: false,
-            variant: Some("light".to_string()),
         };
 
         // Act
-        let (symlink, installed) = entry.convert_to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink(&Some("light".to_string()));
 
         // Assert
         assert_eq!(symlink.target, target);
@@ -239,11 +225,10 @@ mod tests {
             ],
             target: target.clone(),
             overwrite: false,
-            variant: None,
         };
 
         // Act
-        let (symlink, installed) = entry.convert_to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink(&None);
 
         // Assert
         assert_eq!(symlink.target, target);
@@ -277,10 +262,9 @@ mod tests {
             ],
             target: target.clone(),
             overwrite: false,
-            variant: Some("unknown".to_string()),
         };
 
-        let (symlink, installed) = entry.convert_to_symlink();
+        let (symlink, installed) = entry.convert_to_symlink(&Some("unknown".to_string()));
 
         // Assert
         assert_eq!(symlink.target, target);

@@ -24,7 +24,7 @@ pub struct ManifestDelta {
 }
 
 impl Manifest {
-    fn from_json(value: &JsonValue, variant: &Option<String>) -> anyhow::Result<Manifest> {
+    fn from_json(value: &JsonValue) -> anyhow::Result<Manifest> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected manifest to be a JSON object"))?;
@@ -53,7 +53,7 @@ impl Manifest {
                 arr.iter()
                     .enumerate()
                     .map(|(i, v)| {
-                        FileEntry::from_json(v, variant)
+                        FileEntry::from_json(v)
                             .with_context(|| format!("Failed to parse file entry at index {i}"))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?
@@ -64,14 +64,14 @@ impl Manifest {
         Ok(Manifest { files, version })
     }
 
-    pub fn load(path: &Path, home: &PathBuf, variant: &Option<String>) -> anyhow::Result<Manifest> {
-        Manifest::load_internal(path, home, false, variant)
+    pub fn load(path: &Path, home: &PathBuf) -> anyhow::Result<Manifest> {
+        Manifest::load_internal(path, home, false)
     }
 
     pub fn load_previous(state: &State) -> anyhow::Result<Manifest> {
         let path = state.previous_manifest()?;
         Ok(if path.exists() {
-            match Manifest::load_internal(&path, &state.home, true, &None) {
+            match Manifest::load_internal(&path, &state.home, true) {
                 Ok(manifest) => manifest,
                 Err(error) => {
                     warn!("Failed to load previously installed manifest: {}", error);
@@ -83,12 +83,7 @@ impl Manifest {
         })
     }
 
-    fn load_internal(
-        path: &Path,
-        home: &PathBuf,
-        lenient: bool,
-        variant: &Option<String>,
-    ) -> anyhow::Result<Manifest> {
+    fn load_internal(path: &Path, home: &PathBuf, lenient: bool) -> anyhow::Result<Manifest> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
@@ -96,7 +91,7 @@ impl Manifest {
             .parse()
             .map_err(|e| anyhow!("Failed to parse manifest: {}: {e}", path.display()))?;
 
-        let manifest = Manifest::from_json(&json, variant)
+        let manifest = Manifest::from_json(&json)
             .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
 
         debug!(
@@ -118,7 +113,7 @@ impl Manifest {
         Ok(manifest)
     }
 
-    pub fn diff(previous: Manifest, new: Manifest) -> ManifestDelta {
+    pub fn diff(previous: Manifest, new: Manifest, variant: &Option<String>) -> ManifestDelta {
         let to_remove = {
             let new_targets: HashSet<&PathBuf> = new.files.iter().map(|e| &e.target).collect();
 
@@ -126,11 +121,15 @@ impl Manifest {
                 .files
                 .into_iter()
                 .filter(|e| !new_targets.contains(&e.target))
-                .map(|e| e.convert_to_symlink())
+                .map(|e| e.convert_to_symlink(&None))
                 .collect()
         };
 
-        let to_install = new.files.into_iter().map(|e| e.convert_to_symlink()).collect();
+        let to_install = new
+            .files
+            .into_iter()
+            .map(|e| e.convert_to_symlink(variant))
+            .collect();
 
         ManifestDelta {
             remove: to_remove,
@@ -224,7 +223,7 @@ mod tests {
         let json: JsonValue = r#"{"version": 1, "files": []}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json, &None).unwrap();
+        let manifest = Manifest::from_json(&json).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
@@ -256,7 +255,7 @@ mod tests {
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json, &None).unwrap();
+        let manifest = Manifest::from_json(&json).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
@@ -296,7 +295,7 @@ mod tests {
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json, &None).unwrap();
+        let manifest = Manifest::from_json(&json).unwrap();
 
         // Assert
         assert!(!manifest.files[0].overwrite);
@@ -308,7 +307,7 @@ mod tests {
         let json: JsonValue = r#"{"version": 1}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json, &None).unwrap();
+        let manifest = Manifest::from_json(&json).unwrap();
 
         // Assert
         assert!(manifest.files.is_empty());
@@ -320,7 +319,7 @@ mod tests {
         let json: JsonValue = r#"{"files": []}"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json, &None).is_err());
+        assert!(Manifest::from_json(&json).is_err());
     }
 
     #[test]
@@ -331,7 +330,7 @@ mod tests {
             .unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json, &None).is_err());
+        assert!(Manifest::from_json(&json).is_err());
     }
 
     #[test]
@@ -340,7 +339,7 @@ mod tests {
         let json: JsonValue = r#"[]"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json, &None).is_err());
+        assert!(Manifest::from_json(&json).is_err());
     }
 
     #[test]
@@ -356,7 +355,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(previous, new);
+        let delta = Manifest::diff(previous, new, &None);
 
         // Assert
         assert_eq!(delta.remove.len(), 1);
@@ -376,7 +375,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(previous, new);
+        let delta = Manifest::diff(previous, new, &None);
 
         // Assert
         assert_eq!(delta.install.len(), 1);
@@ -396,7 +395,7 @@ mod tests {
         };
 
         // Act
-        let delta = Manifest::diff(previous, new);
+        let delta = Manifest::diff(previous, new, &None);
 
         // Assert
         assert_eq!(delta.install.len(), 1);
@@ -427,13 +426,12 @@ mod tests {
                 ],
                 target: PathBuf::from("/target/a"),
                 overwrite: true,
-                variant: Some("B".to_string()),
             }],
             version: 1,
         };
 
         // Act
-        let delta = Manifest::diff(previous, new);
+        let delta = Manifest::diff(previous, new, &Some("B".to_string()));
 
         // Assert
         assert_eq!(delta.install.len(), 1);

@@ -55,7 +55,6 @@ pub mod tests {
                 }],
                 target,
                 overwrite,
-                None,
             )
         }
     }
