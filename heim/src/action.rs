@@ -46,7 +46,10 @@ impl Action {
 
         let state_path = self.state.previous_manifest()?;
         let previous = StateManifest::load(&state_path)?;
-        let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
+
+        let manifest = Manifest::load(&self.manifest_path)?;
+        manifest.validate(&self.state.home)?;
+
         let delta = Manifest::diff(previous, manifest, &self.variant);
 
         self.pre_flight_check(&delta.install, &delta.remove)?;
@@ -118,7 +121,10 @@ impl Action {
 
         let state_path = self.state.previous_manifest()?;
         let previous = StateManifest::load(&state_path)?;
-        let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
+
+        let manifest = Manifest::load(&self.manifest_path)?;
+        manifest.validate(&self.state.home)?;
+
         let delta = Manifest::diff(previous, manifest, &None);
 
         self.pre_flight_check(&delta.install, &delta.remove)?;

@@ -12,7 +12,7 @@ pub struct SourceEntry {
 }
 
 impl SourceEntry {
-    pub fn from_json(value: &JsonValue) -> anyhow::Result<SourceEntry> {
+    pub fn deserialize(value: &JsonValue) -> anyhow::Result<SourceEntry> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected source entry to be a JSON object"))?;
@@ -87,7 +87,7 @@ impl FileEntry {
         self.sources.iter().position(|f| &f.source == current)
     }
 
-    pub fn from_json(value: &JsonValue) -> anyhow::Result<FileEntry> {
+    pub fn deserialize(value: &JsonValue) -> anyhow::Result<FileEntry> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected file entry to be a JSON object"))?;
@@ -106,7 +106,7 @@ impl FileEntry {
                 arr.iter()
                     .enumerate()
                     .map(|(i, v)| {
-                        SourceEntry::from_json(v)
+                        SourceEntry::deserialize(v)
                             .with_context(|| format!("Failed to parse source entry at index {i}"))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?

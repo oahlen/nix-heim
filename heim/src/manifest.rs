@@ -41,6 +41,21 @@ impl StateManifest {
         }
     }
 
+    pub fn save(path: &Path, symlinks: &[&Symlink]) -> anyhow::Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create state directory: {}", parent.display())
+            })?;
+        }
+
+        let content = Self::serialize(symlinks)?;
+
+        fs::write(path, content)
+            .with_context(|| format!("Failed to write state manifest: {}", path.display()))?;
+
+        Ok(())
+    }
+
     fn deserialize(path: &Path) -> anyhow::Result<Vec<Symlink>> {
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read state manifest: {}", path.display()))?;
@@ -76,7 +91,7 @@ impl StateManifest {
                 arr.iter()
                     .enumerate()
                     .map(|(i, v)| {
-                        Symlink::from_json(v)
+                        Symlink::deserialize(v)
                             .with_context(|| format!("Failed to parse symlink entry at index {i}"))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?
@@ -87,23 +102,8 @@ impl StateManifest {
         Ok(symlinks)
     }
 
-    pub fn save(path: &Path, symlinks: &[&Symlink]) -> anyhow::Result<()> {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("Failed to create state directory: {}", parent.display())
-            })?;
-        }
-
-        let content = Self::serialize(symlinks)?;
-
-        fs::write(path, content)
-            .with_context(|| format!("Failed to write state manifest: {}", path.display()))?;
-
-        Ok(())
-    }
-
     fn serialize(symlinks: &[&Symlink]) -> anyhow::Result<String> {
-        let files: Vec<JsonValue> = symlinks.iter().map(|s| s.to_json()).collect();
+        let files: Vec<JsonValue> = symlinks.iter().map(|s| s.serialize()).collect();
 
         let mut obj = HashMap::new();
         obj.insert(
@@ -114,14 +114,66 @@ impl StateManifest {
 
         let content = JsonValue::Object(obj)
             .stringify()
-            .map_err(|e| anyhow!("Failed to serialise state manifest: {e}"))?;
+            .map_err(|e| anyhow!("Failed to serialize state manifest: {e}"))?;
 
         Ok(content)
     }
 }
 
 impl Manifest {
-    fn from_json(value: &JsonValue) -> anyhow::Result<Manifest> {
+    pub fn load(path: &Path) -> anyhow::Result<Manifest> {
+        let content = std::fs::read_to_string(path)
+            .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
+
+        let json: JsonValue = content
+            .parse()
+            .map_err(|e| anyhow!("Failed to parse manifest: {}: {e}", path.display()))?;
+
+        let manifest = Manifest::deserialize(&json)
+            .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
+
+        debug!(
+            "Parsed manifest {} with version {}",
+            path.display(),
+            manifest.version
+        );
+
+        Ok(manifest)
+    }
+
+    pub fn validate(&self, home: &PathBuf) -> anyhow::Result<()> {
+        ensure_no_duplicates(&self.files)?;
+
+        for entry in &self.files {
+            validate(entry, home)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn diff(previous: Vec<Symlink>, new: Manifest, variant: &Option<String>) -> ManifestDelta {
+        let to_remove: Vec<Symlink> = {
+            let new_targets: HashSet<&PathBuf> = new.files.iter().map(|e| &e.target).collect();
+
+            previous
+                .into_iter()
+                .filter(|s| !new_targets.contains(&s.target))
+                .collect()
+        };
+
+        let to_install = new
+            .files
+            .into_iter()
+            .map(|e| e.convert_to_symlink(variant))
+            .collect();
+
+        ManifestDelta {
+            remove: to_remove,
+            install: to_install,
+        }
+    }
+
+    fn deserialize(value: &JsonValue) -> anyhow::Result<Manifest> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected manifest to be a JSON object"))?;
@@ -150,7 +202,7 @@ impl Manifest {
                 arr.iter()
                     .enumerate()
                     .map(|(i, v)| {
-                        FileEntry::from_json(v)
+                        FileEntry::deserialize(v)
                             .with_context(|| format!("Failed to parse file entry at index {i}"))
                     })
                     .collect::<anyhow::Result<Vec<_>>>()?
@@ -160,60 +212,21 @@ impl Manifest {
 
         Ok(Manifest { files, version })
     }
+}
 
-    pub fn load(path: &Path, home: &PathBuf) -> anyhow::Result<Manifest> {
-        let manifest = Manifest::deserialize(path)?;
+fn ensure_no_duplicates(entries: &Vec<FileEntry>) -> anyhow::Result<()> {
+    let mut seen: HashSet<&PathBuf> = HashSet::new();
 
-        for entry in &manifest.files {
-            validate(entry, home)?;
-        }
-
-        ensure_no_duplicates(&manifest.files)?;
-
-        Ok(manifest)
-    }
-
-    fn deserialize(path: &Path) -> anyhow::Result<Manifest> {
-        let content = std::fs::read_to_string(path)
-            .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
-
-        let json: JsonValue = content
-            .parse()
-            .map_err(|e| anyhow!("Failed to parse manifest: {}: {e}", path.display()))?;
-
-        let manifest = Manifest::from_json(&json)
-            .with_context(|| format!("Failed to parse manifest: {}", path.display()))?;
-
-        debug!(
-            "Parsed manifest {} with version {}",
-            path.display(),
-            manifest.version
-        );
-
-        Ok(manifest)
-    }
-
-    pub fn diff(previous: Vec<Symlink>, new: Manifest, variant: &Option<String>) -> ManifestDelta {
-        let to_remove: Vec<Symlink> = {
-            let new_targets: HashSet<&PathBuf> = new.files.iter().map(|e| &e.target).collect();
-
-            previous
-                .into_iter()
-                .filter(|s| !new_targets.contains(&s.target))
-                .collect()
-        };
-
-        let to_install = new
-            .files
-            .into_iter()
-            .map(|e| e.convert_to_symlink(variant))
-            .collect();
-
-        ManifestDelta {
-            remove: to_remove,
-            install: to_install,
+    for entry in entries.as_slice() {
+        if !seen.insert(&entry.target) {
+            anyhow::bail!(
+                "Duplicate entries found for target {}",
+                entry.target.display()
+            );
         }
     }
+
+    Ok(())
 }
 
 fn validate(entry: &FileEntry, home: &PathBuf) -> anyhow::Result<()> {
@@ -244,21 +257,6 @@ fn validate(entry: &FileEntry, home: &PathBuf) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn ensure_no_duplicates(entries: &Vec<FileEntry>) -> anyhow::Result<()> {
-    let mut seen: HashSet<&PathBuf> = HashSet::new();
-
-    for entry in entries.as_slice() {
-        if !seen.insert(&entry.target) {
-            anyhow::bail!(
-                "Duplicate entries found for target {}",
-                entry.target.display()
-            );
-        }
-    }
-
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -278,12 +276,12 @@ mod tests {
     }
 
     #[test]
-    fn from_json_parses_valid_manifest_with_no_files() {
+    fn deserialize_parses_valid_manifest_with_no_files() {
         // Arrange
         let json: JsonValue = r#"{"version": 1, "files": []}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::deserialize(&json).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
@@ -291,7 +289,7 @@ mod tests {
     }
 
     #[test]
-    fn from_json_parses_files() {
+    fn deserialize_parses_files() {
         // Arrange
         let json: JsonValue = r#"
 {
@@ -315,7 +313,7 @@ mod tests {
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::deserialize(&json).unwrap();
 
         // Assert
         assert_eq!(manifest.version, 1);
@@ -332,7 +330,7 @@ mod tests {
     }
 
     #[test]
-    fn from_json_defaults_overwrite_to_false() {
+    fn deserialize_defaults_overwrite_to_false() {
         // Arrange
         let json: JsonValue = r#"
 {
@@ -355,51 +353,51 @@ mod tests {
         .unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::deserialize(&json).unwrap();
 
         // Assert
         assert!(!manifest.files[0].overwrite);
     }
 
     #[test]
-    fn from_json_returns_empty_files_when_files_key_missing() {
+    fn deserialize_returns_empty_files_when_files_key_missing() {
         // Arrange
         let json: JsonValue = r#"{"version": 1}"#.parse().unwrap();
 
         // Act
-        let manifest = Manifest::from_json(&json).unwrap();
+        let manifest = Manifest::deserialize(&json).unwrap();
 
         // Assert
         assert!(manifest.files.is_empty());
     }
 
     #[test]
-    fn from_json_returns_error_when_version_missing() {
+    fn deserialize_returns_error_when_version_missing() {
         // Arrange
         let json: JsonValue = r#"{"files": []}"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::deserialize(&json).is_err());
     }
 
     #[test]
-    fn from_json_returns_error_when_version_greater_than_supported() {
+    fn deserialize_returns_error_when_version_greater_than_supported() {
         // Arrange
         let json: JsonValue = format!(r#"{{"version": {}}}"#, SUPPORTED_VERSION + 1)
             .parse()
             .unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::deserialize(&json).is_err());
     }
 
     #[test]
-    fn from_json_returns_error_when_not_an_object() {
+    fn deserialize_returns_error_when_not_an_object() {
         // Arrange
         let json: JsonValue = r#"[]"#.parse().unwrap();
 
         // Act + Assert
-        assert!(Manifest::from_json(&json).is_err());
+        assert!(Manifest::deserialize(&json).is_err());
     }
 
     #[test]
@@ -609,41 +607,5 @@ mod tests {
 
         // Assert
         assert!(loaded.is_empty());
-    }
-
-    #[test]
-    fn symlink_to_json_and_from_json_round_trips() {
-        // Arrange
-        let symlink = Symlink::new(
-            PathBuf::from("/nix/store/abc/foo"),
-            PathBuf::from("/home/user/.config/foo"),
-            false,
-        );
-
-        // Act
-        let json = symlink.to_json();
-        let restored = Symlink::from_json(&json).unwrap();
-
-        // Assert
-        assert_eq!(restored.source, symlink.source);
-        assert_eq!(restored.target, symlink.target);
-    }
-
-    #[test]
-    fn symlink_from_json_returns_error_when_source_missing() {
-        // Arrange
-        let json: JsonValue = r#"{"target": "/home/user/foo"}"#.parse().unwrap();
-
-        // Act + Assert
-        assert!(Symlink::from_json(&json).is_err());
-    }
-
-    #[test]
-    fn symlink_from_json_returns_error_when_target_missing() {
-        // Arrange
-        let json: JsonValue = r#"{"source": "/nix/store/abc/foo"}"#.parse().unwrap();
-
-        // Act + Assert
-        assert!(Symlink::from_json(&json).is_err());
     }
 }

@@ -56,7 +56,7 @@ impl Symlink {
         Ok(fs::remove_file(&self.target)?)
     }
 
-    pub fn from_json(value: &JsonValue) -> anyhow::Result<Symlink> {
+    pub fn deserialize(value: &JsonValue) -> anyhow::Result<Symlink> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
             .ok_or_else(|| anyhow!("Expected symlink entry to be a JSON object"))?;
@@ -78,7 +78,7 @@ impl Symlink {
         ))
     }
 
-    pub fn to_json(&self) -> JsonValue {
+    pub fn serialize(&self) -> JsonValue {
         let mut obj = HashMap::new();
 
         obj.insert(
@@ -208,5 +208,41 @@ mod tests {
         assert!(target.is_symlink());
         assert_eq!(entry.is_installed(), true);
         assert_eq!(fs::read_to_string(&target).unwrap(), "src");
+    }
+
+    #[test]
+    fn symlink_serialize_and_deserialize_round_trips() {
+        // Arrange
+        let symlink = Symlink::new(
+            PathBuf::from("/nix/store/abc/foo"),
+            PathBuf::from("/home/user/.config/foo"),
+            false,
+        );
+
+        // Act
+        let json = symlink.serialize();
+        let restored = Symlink::deserialize(&json).unwrap();
+
+        // Assert
+        assert_eq!(restored.source, symlink.source);
+        assert_eq!(restored.target, symlink.target);
+    }
+
+    #[test]
+    fn symlink_deserialize_returns_error_when_source_missing() {
+        // Arrange
+        let json: JsonValue = r#"{"target": "/home/user/foo"}"#.parse().unwrap();
+
+        // Act + Assert
+        assert!(Symlink::deserialize(&json).is_err());
+    }
+
+    #[test]
+    fn symlink_deserialize_returns_error_when_target_missing() {
+        // Arrange
+        let json: JsonValue = r#"{"source": "/nix/store/abc/foo"}"#.parse().unwrap();
+
+        // Act + Assert
+        assert!(Symlink::deserialize(&json).is_err());
     }
 }
