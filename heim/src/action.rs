@@ -52,12 +52,7 @@ impl Action {
         self.pre_flight_check(&delta.install, &delta.remove)?;
 
         for entry in delta.remove {
-            if entry.is_installed() {
-                debug!("Removing entry {}", entry);
-                if !self.dry_run {
-                    entry.uninstall()?;
-                }
-            }
+            self.delete_previous_entry(&entry)?;
         }
 
         let installed_symlinks: Vec<&Symlink> =
@@ -130,13 +125,7 @@ impl Action {
 
         // Make sure to also remove all untracked files from the previous manifest
         for entry in delta.remove {
-            if entry.is_installed() {
-                info!("Uninstalling previous entry {}", entry);
-
-                if !self.dry_run {
-                    entry.uninstall()?;
-                }
-            }
+            self.delete_previous_entry(&entry)?;
         }
 
         for (entry, installed) in delta.install {
@@ -158,6 +147,23 @@ impl Action {
                     anyhow::Error::from(e)
                 ),
             }
+        }
+
+        Ok(())
+    }
+
+    fn delete_previous_entry(&self, entry: &Symlink) -> anyhow::Result<()> {
+        if entry.is_installed() {
+            debug!("Uninstalling previous entry {}", entry);
+
+            if !self.dry_run {
+                entry.uninstall()?;
+            }
+        } else if entry.target_exists() {
+            warn!(
+                "Skipping removal of entry {}, it has changed since last activation",
+                entry
+            );
         }
 
         Ok(())
