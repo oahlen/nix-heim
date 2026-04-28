@@ -167,7 +167,7 @@ mod tests {
 
     use crate::{
         state::State,
-        tests::tests::{test_dir, write_file},
+        tests::tests::{make_symlink, test_dir, write_file},
     };
 
     fn write_manifest(dir: &std::path::Path, entries: &[(PathBuf, PathBuf)]) -> PathBuf {
@@ -234,6 +234,29 @@ mod tests {
 
         // Act + Assert
         assert!(action.pre_flight_check(&[install], &[remove]).is_ok());
+    }
+
+    #[test]
+    fn pre_flight_check_returns_error_when_previous_entry_points_to_unexpected_file() {
+        // Arrange
+        let base = test_dir();
+        let action = empty_action(&base);
+
+        let unexpected_source = write_file(&base, "unexpected.txt", "unexpected");
+        let target = make_symlink(&base, "target.txt", &unexpected_source);
+
+        let remove = (
+            Symlink::new(base.join("old_source.txt"), target.clone(), false),
+            false,
+        );
+
+        let install = (
+            Symlink::new(base.join("new_source.txt"), target.clone(), false),
+            false,
+        );
+
+        // Act + Assert
+        assert!(action.pre_flight_check(&[install], &[remove]).is_err());
     }
 
     #[test]
