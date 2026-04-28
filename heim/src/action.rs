@@ -253,7 +253,7 @@ mod tests {
         let remove = Symlink::new(base.join("old_source.txt"), target.clone(), false);
 
         let install = (
-            Symlink::new(base.join("new_source.txt"), target.clone(), false),
+            Symlink::new(base.join("new_source.txt"), target, false),
             false,
         );
 
@@ -286,8 +286,7 @@ mod tests {
         let manifest_path = write_manifest(&base, &[(source, target.clone())]);
         let new_manifest_path = state.join("heim").join("manifest.json");
 
-        let action =
-            Action::new(manifest_path, false, State::new(home, state.clone()), None).unwrap();
+        let action = Action::new(manifest_path, false, State::new(home, state), None).unwrap();
 
         // Act
         let result = action.activate();

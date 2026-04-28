@@ -149,7 +149,7 @@ mod tests {
         let target = write_file(&base, "target.txt", "target");
 
         // Act
-        let entry = Symlink::new(source, target.clone(), false);
+        let entry = Symlink::new(source, target, false);
 
         // Assert
         assert!(entry.target_exists());

@@ -176,7 +176,7 @@ mod tests {
         let entry = FileEntry {
             sources: vec![
                 SourceEntry {
-                    source: source.clone(),
+                    source: source,
                     name: "dark".to_string(),
                     default: true,
                 },
@@ -213,7 +213,7 @@ mod tests {
         let entry = FileEntry {
             sources: vec![
                 SourceEntry {
-                    source: source.clone(),
+                    source: source,
                     name: "dark".to_string(),
                     default: false,
                 },
