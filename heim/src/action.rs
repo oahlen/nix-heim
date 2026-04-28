@@ -1,10 +1,10 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, fs, path::PathBuf};
 
 use anyhow::Context;
 use log::{debug, info, warn};
 
 use crate::{
-    manifest::{Manifest, copy_manifest, delete_manifest},
+    manifest::{Manifest, StateManifest},
     state::State,
     symlink::Symlink,
 };
@@ -44,20 +44,24 @@ impl Action {
             &self.manifest_path.display()
         );
 
-        let previous = Manifest::load_previous(&self.state)?;
+        let state_path = self.state.previous_manifest()?;
+        let previous = StateManifest::load(&state_path)?;
         let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
         let delta = Manifest::diff(previous, manifest, &self.variant);
 
         self.pre_flight_check(&delta.install, &delta.remove)?;
 
-        for (entry, installed) in delta.remove {
-            if installed {
+        for entry in delta.remove {
+            if entry.is_installed() {
                 debug!("Removing entry {}", entry);
                 if !self.dry_run {
                     entry.uninstall()?;
                 }
             }
         }
+
+        let installed_symlinks: Vec<&Symlink> =
+            delta.install.iter().map(|(entry, _)| entry).collect();
 
         for (entry, installed) in &delta.install {
             if !installed {
@@ -70,7 +74,7 @@ impl Action {
         }
 
         if !self.dry_run {
-            match copy_manifest(&self.manifest_path, &self.state.previous_manifest()?) {
+            match StateManifest::save(&state_path, &installed_symlinks) {
                 Ok(_) => {}
                 Err(error) => warn!("Unable to store state manifest: {}", error),
             }
@@ -82,12 +86,12 @@ impl Action {
     fn pre_flight_check(
         &self,
         to_install: &[(Symlink, bool)],
-        to_remove: &[(Symlink, bool)],
+        to_remove: &[Symlink],
     ) -> anyhow::Result<()> {
         let excluded_targets: HashSet<&PathBuf> = to_remove
             .iter()
-            .filter(|(_, installed)| *installed)
-            .map(|(entry, _)| &entry.target)
+            .filter(|e| e.is_installed())
+            .map(|e| &e.target)
             .collect();
 
         let conflicts: Vec<_> = to_install
@@ -117,15 +121,16 @@ impl Action {
             &self.manifest_path.display()
         );
 
-        let previous = Manifest::load_previous(&self.state)?;
+        let state_path = self.state.previous_manifest()?;
+        let previous = StateManifest::load(&state_path)?;
         let manifest = Manifest::load(&self.manifest_path, &self.state.home)?;
         let delta = Manifest::diff(previous, manifest, &None);
 
         self.pre_flight_check(&delta.install, &delta.remove)?;
 
         // Make sure to also remove all untracked files from the previous manifest
-        for (entry, installed) in delta.remove {
-            if installed {
+        for entry in delta.remove {
+            if entry.is_installed() {
                 info!("Uninstalling previous entry {}", entry);
 
                 if !self.dry_run {
@@ -145,13 +150,13 @@ impl Action {
         }
 
         if !self.dry_run {
-            match delete_manifest(&self.state.previous_manifest()?)
-                .context("Failed to delete state manifest")
-            {
-                Ok(_) => {}
-                Err(error) => {
-                    warn!("Unable to clean up old state manifest: {}", error);
-                }
+            match fs::remove_file(&state_path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => warn!(
+                    "Unable to clean up old state manifest: {}",
+                    anyhow::Error::from(e)
+                ),
             }
         }
 
@@ -220,17 +225,17 @@ mod tests {
         // Arrange
         let base = test_dir();
         let action = empty_action(&base);
-        let existing_target = write_file(&base, "target.txt", "existing");
+
+        let existing_source = write_file(&base, "existing_source.txt", "existing");
+        let existing_target = make_symlink(&base, "target.txt", &existing_source);
+        let new_source = write_file(&base, "new_source.txt", "new");
 
         let install = (
-            Symlink::new(base.join("source.txt"), existing_target.clone(), false),
+            Symlink::new(new_source, existing_target.clone(), false),
             false,
         );
 
-        let remove = (
-            Symlink::new(base.join("source.txt"), existing_target.clone(), false),
-            true,
-        );
+        let remove = Symlink::new(existing_source, existing_target, false);
 
         // Act + Assert
         assert!(action.pre_flight_check(&[install], &[remove]).is_ok());
@@ -245,10 +250,7 @@ mod tests {
         let unexpected_source = write_file(&base, "unexpected.txt", "unexpected");
         let target = make_symlink(&base, "target.txt", &unexpected_source);
 
-        let remove = (
-            Symlink::new(base.join("old_source.txt"), target.clone(), false),
-            false,
-        );
+        let remove = Symlink::new(base.join("old_source.txt"), target.clone(), false);
 
         let install = (
             Symlink::new(base.join("new_source.txt"), target.clone(), false),

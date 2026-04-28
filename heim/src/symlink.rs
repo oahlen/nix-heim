@@ -1,5 +1,7 @@
+use anyhow::anyhow;
 use log::{debug, warn};
-use std::{fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
+use std::{collections::HashMap, fmt::Display, fs, os::unix::fs as unix_fs, path::PathBuf};
+use tinyjson::JsonValue;
 
 pub struct Symlink {
     pub source: PathBuf,
@@ -18,6 +20,17 @@ impl Symlink {
 
     pub fn target_exists(&self) -> bool {
         self.target.symlink_metadata().is_ok()
+    }
+
+    pub fn is_installed(&self) -> bool {
+        if !self.target.is_symlink() {
+            return false;
+        }
+
+        match fs::read_link(&self.target) {
+            Ok(current) => current == *self.source,
+            Err(_) => false,
+        }
     }
 
     pub fn install(&self) -> anyhow::Result<()> {
@@ -42,6 +55,44 @@ impl Symlink {
     pub fn uninstall(&self) -> anyhow::Result<()> {
         Ok(fs::remove_file(&self.target)?)
     }
+
+    pub fn from_json(value: &JsonValue) -> anyhow::Result<Symlink> {
+        let obj: &HashMap<String, JsonValue> = value
+            .get()
+            .ok_or_else(|| anyhow!("Expected symlink entry to be a JSON object"))?;
+
+        let source = obj
+            .get("source")
+            .and_then(|v| v.get::<String>())
+            .ok_or_else(|| anyhow!("Missing or invalid 'source' field in symlink entry"))?;
+
+        let target = obj
+            .get("target")
+            .and_then(|v| v.get::<String>())
+            .ok_or_else(|| anyhow!("Missing or invalid 'target' field in symlink entry"))?;
+
+        Ok(Symlink::new(
+            PathBuf::from(source),
+            PathBuf::from(target),
+            false,
+        ))
+    }
+
+    pub fn to_json(&self) -> JsonValue {
+        let mut obj = HashMap::new();
+
+        obj.insert(
+            "source".to_string(),
+            JsonValue::String(self.source.to_string_lossy().into_owned()),
+        );
+
+        obj.insert(
+            "target".to_string(),
+            JsonValue::String(self.target.to_string_lossy().into_owned()),
+        );
+
+        JsonValue::Object(obj)
+    }
 }
 
 impl Display for Symlink {
@@ -59,7 +110,7 @@ impl Display for Symlink {
 mod tests {
     use super::*;
 
-    use crate::tests::tests::{make_symlink, test_dir, verify_symlink, write_file};
+    use crate::tests::tests::{make_symlink, test_dir, write_file};
 
     #[test]
     fn install_and_uninstall_works() {
@@ -74,14 +125,14 @@ mod tests {
         let entry = Symlink::new(source, target.clone(), false);
 
         // Assert
-        assert_eq!(verify_symlink(&entry.target, &entry.source), false);
+        assert_eq!(entry.is_installed(), false);
 
         // Act
         entry.install().unwrap();
 
         // Assert
         assert!(target.is_symlink());
-        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
+        assert_eq!(entry.is_installed(), true);
 
         // Act
         entry.uninstall().unwrap();
@@ -117,7 +168,7 @@ mod tests {
 
         // Assert
         assert!(target.is_symlink());
-        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
+        assert_eq!(entry.is_installed(), true);
         assert_eq!(fs::read_to_string(&target).unwrap(), "src");
     }
 
@@ -136,7 +187,7 @@ mod tests {
         assert!(result.is_err());
 
         assert!(!target.is_symlink());
-        assert_eq!(verify_symlink(&entry.target, &entry.source), false);
+        assert_eq!(entry.is_installed(), false);
         assert_eq!(fs::read_to_string(&target).unwrap(), "target");
     }
 
@@ -155,7 +206,7 @@ mod tests {
 
         // Assert
         assert!(target.is_symlink());
-        assert_eq!(verify_symlink(&entry.target, &entry.source), true);
+        assert_eq!(entry.is_installed(), true);
         assert_eq!(fs::read_to_string(&target).unwrap(), "src");
     }
 }

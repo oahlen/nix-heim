@@ -34,17 +34,6 @@ pub mod tests {
         target
     }
 
-    pub fn verify_symlink(target: &PathBuf, source: &PathBuf) -> bool {
-        if !target.is_symlink() {
-            return false;
-        }
-
-        match fs::read_link(&target) {
-            Ok(current) => current == *source,
-            Err(_) => false,
-        }
-    }
-
     impl FileEntry {
         pub fn create(source: PathBuf, target: PathBuf, overwrite: bool) -> FileEntry {
             FileEntry::new(

@@ -48,6 +48,45 @@ pub struct FileEntry {
 }
 
 impl FileEntry {
+    pub fn new(sources: Vec<SourceEntry>, target: PathBuf, overwrite: bool) -> FileEntry {
+        FileEntry {
+            sources,
+            target,
+            overwrite,
+        }
+    }
+
+    pub fn convert_to_symlink(mut self, variant: &Option<String>) -> (Symlink, bool) {
+        let (index, installed) = if let Ok(current) = fs::read_link(&self.target)
+            && let Some(idx) = self.matching_index(&current, variant)
+        {
+            (idx, true)
+        } else {
+            (self.source_index(variant), false)
+        };
+
+        let source = self.sources.swap_remove(index).source;
+        (Symlink::new(source, self.target, self.overwrite), installed)
+    }
+
+    fn source_index(&self, variant: &Option<String>) -> usize {
+        variant
+            .as_ref()
+            .and_then(|variant| self.sources.iter().position(|f| &f.name == variant))
+            .or_else(|| self.sources.iter().position(|f| f.default))
+            .unwrap_or(0)
+    }
+
+    fn matching_index(&self, current: &PathBuf, variant: &Option<String>) -> Option<usize> {
+        if let Some(variant) = variant
+            && let Some(index) = self.sources.iter().position(|f| &f.name == variant)
+        {
+            return (current == &self.sources[index].source).then_some(index);
+        }
+
+        self.sources.iter().position(|f| &f.source == current)
+    }
+
     pub fn from_json(value: &JsonValue) -> anyhow::Result<FileEntry> {
         let obj: &HashMap<String, JsonValue> = value
             .get()
@@ -86,45 +125,6 @@ impl FileEntry {
             .unwrap_or(false);
 
         Ok(FileEntry::new(sources, PathBuf::from(target), overwrite))
-    }
-
-    pub fn new(sources: Vec<SourceEntry>, target: PathBuf, overwrite: bool) -> FileEntry {
-        FileEntry {
-            sources,
-            target,
-            overwrite,
-        }
-    }
-
-    pub fn convert_to_symlink(mut self, variant: &Option<String>) -> (Symlink, bool) {
-        let (index, installed) = if let Ok(current) = fs::read_link(&self.target)
-            && let Some(idx) = self.matching_index(&current, variant)
-        {
-            (idx, true)
-        } else {
-            (self.source_index(variant), false)
-        };
-
-        let source = self.sources.swap_remove(index).source;
-        (Symlink::new(source, self.target, self.overwrite), installed)
-    }
-
-    fn source_index(&self, variant: &Option<String>) -> usize {
-        variant
-            .as_ref()
-            .and_then(|variant| self.sources.iter().position(|f| &f.name == variant))
-            .or_else(|| self.sources.iter().position(|f| f.default))
-            .unwrap_or(0)
-    }
-
-    fn matching_index(&self, current: &PathBuf, variant: &Option<String>) -> Option<usize> {
-        if let Some(variant) = variant
-            && let Some(index) = self.sources.iter().position(|f| &f.name == variant)
-        {
-            return (current == &self.sources[index].source).then_some(index);
-        }
-
-        self.sources.iter().position(|f| &f.source == current)
     }
 }
 

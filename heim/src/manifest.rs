@@ -8,9 +8,10 @@ use anyhow::{Context, anyhow};
 use log::{debug, warn};
 use tinyjson::JsonValue;
 
-use crate::{entry::FileEntry, state::State, symlink::Symlink};
+use crate::{entry::FileEntry, symlink::Symlink};
 
 const SUPPORTED_VERSION: u32 = 1;
+const SUPPORTED_STATE_VERSION: u32 = 1;
 
 #[derive(Default)]
 pub struct Manifest {
@@ -19,8 +20,104 @@ pub struct Manifest {
 }
 
 pub struct ManifestDelta {
-    pub remove: Vec<(Symlink, bool)>,
+    pub remove: Vec<Symlink>,
     pub install: Vec<(Symlink, bool)>,
+}
+
+pub struct StateManifest;
+
+impl StateManifest {
+    pub fn load(path: &Path) -> anyhow::Result<Vec<Symlink>> {
+        if !path.exists() {
+            return Ok(Vec::new());
+        }
+
+        match Self::deserialize(path) {
+            Ok(symlinks) => Ok(symlinks),
+            Err(error) => {
+                warn!("Failed to load state manifest: {}", error);
+                Ok(Vec::new())
+            }
+        }
+    }
+
+    fn deserialize(path: &Path) -> anyhow::Result<Vec<Symlink>> {
+        let content = fs::read_to_string(path)
+            .with_context(|| format!("Failed to read state manifest: {}", path.display()))?;
+
+        let json: JsonValue = content
+            .parse()
+            .map_err(|e| anyhow!("Failed to parse state manifest: {}: {e}", path.display()))?;
+
+        let obj: &HashMap<String, JsonValue> = json
+            .get()
+            .ok_or_else(|| anyhow!("Expected state manifest to be a JSON object"))?;
+
+        let version = obj
+            .get("version")
+            .and_then(|v| v.get::<f64>())
+            .map(|v| *v as u32)
+            .ok_or_else(|| anyhow!("Missing or invalid 'version' field in state manifest"))?;
+
+        if version > SUPPORTED_STATE_VERSION {
+            anyhow::bail!(
+                "State manifest version is greater than supported: {} > {}",
+                version,
+                SUPPORTED_STATE_VERSION
+            );
+        }
+
+        let symlinks = match obj.get("files") {
+            Some(arr_value) => {
+                let arr: &Vec<JsonValue> = arr_value
+                    .get()
+                    .ok_or_else(|| anyhow!("'files' field must be a JSON array"))?;
+
+                arr.iter()
+                    .enumerate()
+                    .map(|(i, v)| {
+                        Symlink::from_json(v)
+                            .with_context(|| format!("Failed to parse symlink entry at index {i}"))
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?
+            }
+            None => Vec::new(),
+        };
+
+        Ok(symlinks)
+    }
+
+    pub fn save(path: &Path, symlinks: &[&Symlink]) -> anyhow::Result<()> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!("Failed to create state directory: {}", parent.display())
+            })?;
+        }
+
+        let content = Self::serialize(symlinks)?;
+
+        fs::write(path, content)
+            .with_context(|| format!("Failed to write state manifest: {}", path.display()))?;
+
+        Ok(())
+    }
+
+    fn serialize(symlinks: &[&Symlink]) -> anyhow::Result<String> {
+        let files: Vec<JsonValue> = symlinks.iter().map(|s| s.to_json()).collect();
+
+        let mut obj = HashMap::new();
+        obj.insert(
+            "version".to_string(),
+            JsonValue::Number(SUPPORTED_STATE_VERSION as f64),
+        );
+        obj.insert("files".to_string(), JsonValue::Array(files));
+
+        let content = JsonValue::Object(obj)
+            .stringify()
+            .map_err(|e| anyhow!("Failed to serialise state manifest: {e}"))?;
+
+        Ok(content)
+    }
 }
 
 impl Manifest {
@@ -65,25 +162,18 @@ impl Manifest {
     }
 
     pub fn load(path: &Path, home: &PathBuf) -> anyhow::Result<Manifest> {
-        Manifest::load_internal(path, home, false)
+        let manifest = Manifest::deserialize(path)?;
+
+        for entry in &manifest.files {
+            validate(entry, home)?;
+        }
+
+        ensure_no_duplicates(&manifest.files)?;
+
+        Ok(manifest)
     }
 
-    pub fn load_previous(state: &State) -> anyhow::Result<Manifest> {
-        let path = state.previous_manifest()?;
-        Ok(if path.exists() {
-            match Manifest::load_internal(&path, &state.home, true) {
-                Ok(manifest) => manifest,
-                Err(error) => {
-                    warn!("Failed to load previously installed manifest: {}", error);
-                    Manifest::default()
-                }
-            }
-        } else {
-            Manifest::default()
-        })
-    }
-
-    fn load_internal(path: &Path, home: &PathBuf, lenient: bool) -> anyhow::Result<Manifest> {
+    fn deserialize(path: &Path) -> anyhow::Result<Manifest> {
         let content = std::fs::read_to_string(path)
             .with_context(|| format!("Failed to read manifest: {}", path.display()))?;
 
@@ -100,28 +190,16 @@ impl Manifest {
             manifest.version
         );
 
-        if lenient {
-            return Ok(manifest);
-        }
-
-        for entry in &manifest.files {
-            validate(entry, home)?;
-        }
-
-        ensure_no_duplicates(&manifest.files)?;
-
         Ok(manifest)
     }
 
-    pub fn diff(previous: Manifest, new: Manifest, variant: &Option<String>) -> ManifestDelta {
-        let to_remove = {
+    pub fn diff(previous: Vec<Symlink>, new: Manifest, variant: &Option<String>) -> ManifestDelta {
+        let to_remove: Vec<Symlink> = {
             let new_targets: HashSet<&PathBuf> = new.files.iter().map(|e| &e.target).collect();
 
             previous
-                .files
                 .into_iter()
-                .filter(|e| !new_targets.contains(&e.target))
-                .map(|e| e.convert_to_symlink(&None))
+                .filter(|s| !new_targets.contains(&s.target))
                 .collect()
         };
 
@@ -181,40 +259,22 @@ fn ensure_no_duplicates(entries: &Vec<FileEntry>) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn copy_manifest(src: &Path, dest: &PathBuf) -> anyhow::Result<()> {
-    if let Some(parent) = dest.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("Failed to create parent directory: {}", parent.display()))?;
-    }
-
-    let content =
-        fs::read(src).with_context(|| format!("Failed to read manifest: {}", src.display()))?;
-
-    fs::write(dest, content)
-        .with_context(|| format!("Failed to save manifest to: {}", dest.display()))?;
-
-    Ok(())
-}
-
-pub fn delete_manifest(path: &PathBuf) -> anyhow::Result<()> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(e).with_context(|| format!("Failed to delete manifest: {}", path.display())),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     use crate::{
         entry::{FileEntry, SourceEntry},
+        symlink::Symlink,
         tests::tests::{test_dir, write_file},
     };
 
     fn make_entry(source: &str, target: &str) -> FileEntry {
         FileEntry::create(PathBuf::from(source), PathBuf::from(target), false)
+    }
+
+    fn make_symlink_entry(source: &str, target: &str) -> Symlink {
+        Symlink::new(PathBuf::from(source), PathBuf::from(target), false)
     }
 
     #[test]
@@ -345,10 +405,7 @@ mod tests {
     #[test]
     fn diff_entry_only_in_previous_is_removed() {
         // Arrange
-        let previous = Manifest {
-            files: vec![make_entry("/src/a", "/target/a")],
-            version: 1,
-        };
+        let previous = vec![make_symlink_entry("/src/a", "/target/a")];
         let new = Manifest {
             files: vec![],
             version: 1,
@@ -365,10 +422,7 @@ mod tests {
     #[test]
     fn diff_entry_only_in_new_is_installed() {
         // Arrange
-        let previous = Manifest {
-            files: vec![],
-            version: 1,
-        };
+        let previous = vec![];
         let new = Manifest {
             files: vec![make_entry("/src/a", "/target/a")],
             version: 1,
@@ -385,10 +439,7 @@ mod tests {
     #[test]
     fn diff_entry_with_changed_source_is_reinstalled() {
         // Arrange
-        let previous = Manifest {
-            files: vec![make_entry("/src/old", "/target/a")],
-            version: 1,
-        };
+        let previous = vec![make_symlink_entry("/src/old", "/target/a")];
         let new = Manifest {
             files: vec![make_entry("/src/new", "/target/a")],
             version: 1,
@@ -406,10 +457,7 @@ mod tests {
     #[test]
     fn diff_entry_with_different_sources_is_reinstalled() {
         // Arrange
-        let previous = Manifest {
-            files: vec![make_entry("/src/old", "/target/a")],
-            version: 1,
-        };
+        let previous = vec![make_symlink_entry("/src/old", "/target/a")];
         let new = Manifest {
             files: vec![FileEntry {
                 sources: vec![
@@ -507,5 +555,95 @@ mod tests {
 
         // Act + Assert
         assert!(ensure_no_duplicates(&entries).is_err());
+    }
+
+    #[test]
+    fn state_manifest_save_and_load_round_trips() {
+        // Arrange
+        let base = test_dir();
+        let path = base.join("state.json");
+        let symlinks = vec![
+            Symlink::new(PathBuf::from("/src/a"), PathBuf::from("/target/a"), false),
+            Symlink::new(PathBuf::from("/src/b"), PathBuf::from("/target/b"), false),
+        ];
+        let refs: Vec<&Symlink> = symlinks.iter().collect();
+
+        // Act
+        StateManifest::save(&path, &refs).unwrap();
+        let loaded = StateManifest::load(&path).unwrap();
+
+        // Assert
+        assert_eq!(loaded.len(), 2);
+        assert_eq!(loaded[0].source, PathBuf::from("/src/a"));
+        assert_eq!(loaded[0].target, PathBuf::from("/target/a"));
+        assert_eq!(loaded[1].source, PathBuf::from("/src/b"));
+        assert_eq!(loaded[1].target, PathBuf::from("/target/b"));
+    }
+
+    #[test]
+    fn state_manifest_load_returns_empty_when_file_missing() {
+        // Arrange
+        let base = test_dir();
+        let path = base.join("nonexistent.json");
+
+        // Act
+        let loaded = StateManifest::load(&path).unwrap();
+
+        // Assert
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn state_manifest_load_returns_empty_on_unsupported_version() {
+        // Arrange
+        let base = test_dir();
+        let path = base.join("state.json");
+        let content = format!(
+            r#"{{"version": {}, "files": []}}"#,
+            SUPPORTED_STATE_VERSION + 1
+        );
+        fs::write(&path, content).unwrap();
+
+        // Act — lenient load returns empty vec and warns rather than propagating the error
+        let loaded = StateManifest::load(&path).unwrap();
+
+        // Assert
+        assert!(loaded.is_empty());
+    }
+
+    #[test]
+    fn symlink_to_json_and_from_json_round_trips() {
+        // Arrange
+        let symlink = Symlink::new(
+            PathBuf::from("/nix/store/abc/foo"),
+            PathBuf::from("/home/user/.config/foo"),
+            false,
+        );
+
+        // Act
+        let json = symlink.to_json();
+        let restored = Symlink::from_json(&json).unwrap();
+
+        // Assert
+        assert_eq!(restored.source, symlink.source);
+        assert_eq!(restored.target, symlink.target);
+    }
+
+    #[test]
+    fn symlink_from_json_returns_error_when_source_missing() {
+        // Arrange
+        let json: JsonValue = r#"{"target": "/home/user/foo"}"#.parse().unwrap();
+
+        // Act + Assert
+        assert!(Symlink::from_json(&json).is_err());
+    }
+
+    #[test]
+    fn symlink_from_json_returns_error_when_target_missing() {
+        // Arrange
+        let json: JsonValue = r#"{"source": "/nix/store/abc/foo"}"#.parse().unwrap();
+
+        // Act + Assert
+        assert!(Symlink::from_json(&json).is_err());
     }
 }
