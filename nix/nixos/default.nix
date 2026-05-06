@@ -30,6 +30,9 @@ let
 
   userSubmodule =
     { config, name, ... }:
+    let
+      cfg = global.config.users.users.${name};
+    in
     {
       options = {
         heim = mkOption {
@@ -40,7 +43,7 @@ let
       };
 
       config = {
-        heim.home.directory = mkDefault global.config.users.users.${name}.home;
+        heim.home.directory = mkIf cfg.isNormalUser (mkDefault cfg.home);
 
         packages =
           let
@@ -54,6 +57,7 @@ let
               linker
               activate
               deactivate
+              j
             ]
             ++ config.heim.packages
           );
