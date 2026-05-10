@@ -5,7 +5,11 @@ pub mod tests {
     use crate::entry::{FileEntry, SourceEntry};
 
     pub fn test_dir() -> PathBuf {
-        let id = uuid::Uuid::new_v4();
+        let id = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+
         let dir = std::env::temp_dir().join(format!("heim_test_{}", id));
         fs::create_dir_all(&dir).unwrap();
         dir
