@@ -57,7 +57,6 @@ let
               linker
               activate
               deactivate
-              j
             ]
             ++ config.heim.packages
           );
