@@ -138,7 +138,14 @@ in
     };
 
     sessionVariables = mkOption {
-      type = types.attrsOf types.str;
+      type = types.lazyAttrsOf (
+        types.oneOf [
+          types.str
+          types.path
+          types.int
+          types.float
+        ]
+      );
       default = { };
       description = ''
         Session variables for this user exposed as a POSIX compliant shell script under <profile>/share/heim/session-vars.sh that can be sourced as needed.

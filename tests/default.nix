@@ -59,8 +59,10 @@ nix-heim pkgs [
 
       sessionVariables = {
         EDITOR = "vim";
-        PAGER = "less";
+        FILE = ./default.nix;
         HTOP_PATH = lib.getExe pkgs.htop;
+        INTEGER = 1;
+        PAGER = "less";
         PATH = "$HOME/bin";
       };
 
