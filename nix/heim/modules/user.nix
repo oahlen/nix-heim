@@ -141,7 +141,7 @@ in
       type = types.attrsOf types.str;
       default = { };
       description = ''
-        Session variables for this user exposed as a POSIX compliant shell script under <profile_path>/share/heim/session-vars.sh that can be sourced as needed.
+        Session variables for this user exposed as a POSIX compliant shell script under <profile>/share/heim/session-vars.sh that can be sourced as needed.
         If using nix-heim in standalone mode the path '/share' must be included in `pathsToLink` for the script to be included.
       '';
 
