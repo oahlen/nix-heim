@@ -61,6 +61,7 @@ nix-heim pkgs [
         EDITOR = "vim";
         PAGER = "less";
         HTOP_PATH = lib.getExe pkgs.htop;
+        PATH = "$HOME/bin";
       };
 
       packages = [ pkgs.htop ];
