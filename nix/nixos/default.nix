@@ -6,7 +6,6 @@
 let
   inherit (lib)
     literalExpression
-    mkDefault
     mkIf
     mkOption
     singleton
@@ -30,28 +29,21 @@ let
 
   userSubmodule =
     { config, name, ... }:
-    let
-      cfg = global.config.users.users.${name};
-    in
     {
       options = {
         heim = mkOption {
           description = "Nix-heim configuration";
-          type = heimModule;
-          default = { };
+          type = types.nullOr heimModule;
+          default = null;
         };
       };
 
       config = {
-        heim.home.directory = mkIf cfg.isNormalUser (mkDefault cfg.home);
-
         packages =
           let
             environment = callPackage ../heim/environment.nix { inherit (config.heim) files; };
-            hasFiles = builtins.any (fileSet: fileSet != { }) config.heim.files;
-            hasPackages = config.heim.packages != [ ];
           in
-          mkIf (hasFiles || hasPackages) (
+          mkIf (config.heim != null) (
             with environment;
             [
               linker
