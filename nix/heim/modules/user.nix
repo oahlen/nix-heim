@@ -7,6 +7,7 @@
 let
   inherit (lib)
     hasPrefix
+    mkIf
     mkOption
     throwIfNot
     types
@@ -190,28 +191,34 @@ in
       visible = false;
     };
 
-    sessionVariablesPackage = mkOption {
-      type = types.package;
+    loadSessionVariables = mkOption {
+      type = types.path;
       readOnly = true;
-      description = "Package containing the configured session variables.";
+      description = "Path to the POSIX compliant shell script containing the configured session variables.";
     };
   };
 
-  config = {
-    files = [
-      config.home.files
-      config.xdg.config.files
-      config.xdg.data.files
-      config.xdg.state.files
-    ];
+  config =
+    let
+      sessionVariables = pkgs.callPackage ../session-vars.nix {
+        inherit (config)
+          sessionVariables
+          sessionPath
+          ;
+      };
+    in
+    {
+      files = [
+        config.home.files
+        config.xdg.config.files
+        config.xdg.data.files
+        config.xdg.state.files
+      ];
 
-    sessionVariablesPackage = pkgs.callPackage ../session-vars.nix {
-      inherit (config)
-        sessionVariables
-        sessionPath
-        ;
+      loadSessionVariables = sessionVariables.path;
+
+      packages = mkIf (config.sessionVariables != { } || config.sessionPath != [ ]) [
+        sessionVariables.package
+      ];
     };
-
-    packages = [ config.sessionVariablesPackage ];
-  };
 }
