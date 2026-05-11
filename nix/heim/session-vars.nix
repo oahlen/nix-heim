@@ -10,14 +10,11 @@ let
     mapAttrsToList
     ;
 
-  destination = "/share/heim/session-vars.sh";
-
   export = name: value: ''export ${name}="${toString value}"'';
 
   prependToPath = v: "${concatStringsSep ":" v}\${PATH:+:}\$PATH";
-in
-{
-  path = destination;
+
+  destination = "/share/heim/session-vars.sh";
 
   package = writeTextFile {
     name = "heim-session-vars";
@@ -28,4 +25,8 @@ in
       ${export "PATH" (prependToPath sessionPath)}
     '';
   };
+in
+{
+  path = "${package}${destination}";
+  inherit package;
 }

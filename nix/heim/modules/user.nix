@@ -202,8 +202,8 @@ in
     let
       sessionVariables = pkgs.callPackage ../session-vars.nix {
         inherit (config)
-          sessionVariables
           sessionPath
+          sessionVariables
           ;
       };
     in
