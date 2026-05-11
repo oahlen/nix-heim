@@ -7,7 +7,6 @@
 let
   inherit (lib)
     hasPrefix
-    mkIf
     mkOption
     throwIfNot
     types
@@ -148,14 +147,31 @@ in
       );
       default = { };
       description = ''
-        Session variables for this user exposed as a POSIX compliant shell script under <profile>/share/heim/session-vars.sh that can be sourced as needed.
-        If using nix-heim in standalone mode the path '/share' must be included in `pathsToLink` for the script to be included.
+        Session variables for this user exposed as a POSIX compliant shell script.
+
+        Two ways of sourcing the script are available:
+
+        1. Via the Nix store path exposed as `config.sessionVariablesPackage`, suitable for use in managed dotfiles:
+           `. ''${config.sessionVariablesPackage}`
+
+        2. Via `XDG_DATA_DIRS` discovery (requires `/share` in `pathsToLink` for standalone installs or `environment.pathsToLink` for nixos respectively):
+           The script is installed to `<profile>/share/heim/session-vars.sh`.
       '';
 
       example = {
         EDITOR = "vim";
         PAGER = "less";
       };
+    };
+
+    sessionPath = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      description = "Directories to prepend the $PATH variable in the generated session variables script.";
+      example = [
+        "$HOME/.local/bin"
+        "\${xdg.config.directory}/scrips"
+      ];
     };
 
     overwrite = mkOption {
@@ -173,6 +189,12 @@ in
       readOnly = true;
       visible = false;
     };
+
+    sessionVariablesPackage = mkOption {
+      type = types.package;
+      readOnly = true;
+      description = "Package containing the configured session variables.";
+    };
   };
 
   config = {
@@ -183,8 +205,13 @@ in
       config.xdg.state.files
     ];
 
-    packages = mkIf (config.sessionVariables != { }) [
-      (pkgs.callPackage ../session-vars.nix { inherit (config) sessionVariables; })
-    ];
+    sessionVariablesPackage = pkgs.callPackage ../session-vars.nix {
+      inherit (config)
+        sessionVariables
+        sessionPath
+        ;
+    };
+
+    packages = [ config.sessionVariablesPackage ];
   };
 }

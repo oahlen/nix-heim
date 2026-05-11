@@ -9,6 +9,7 @@ in
 nix-heim pkgs [
   (
     {
+      config,
       lib,
       pkgs,
       ...
@@ -65,6 +66,11 @@ nix-heim pkgs [
         PAGER = "less";
         PATH = "$HOME/bin";
       };
+
+      sessionPath = [
+        "$HOME/.local/bin"
+        "${config.xdg.config.directory}/scrips"
+      ];
 
       packages = [ pkgs.htop ];
     }
