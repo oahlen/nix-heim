@@ -8,6 +8,7 @@
   packages ? [ ],
   pathsToLink ? [ ],
   pkgs,
+  user,
 }:
 let
   inherit (lib) getExe;
@@ -17,7 +18,12 @@ let
     writeShellScriptBin
     ;
 
-  manifest = callPackage ./manifest.nix { inherit files; };
+  manifest = callPackage ./manifest.nix {
+    inherit
+      files
+      user
+      ;
+  };
 
   linker = callPackage ../../heim/package.nix { doCheck = false; };
 

@@ -23,11 +23,10 @@ pkgs.nixos [
         isNormalUser = true;
 
         heim = {
+          user = "nixos";
           overwrite = true;
 
           home = {
-            directory = "/home/nixos";
-
             files = {
               "directory1" = {
                 source = ./files/directory1;

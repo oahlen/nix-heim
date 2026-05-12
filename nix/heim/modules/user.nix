@@ -28,13 +28,18 @@ let
 in
 {
   options = {
+    user = mkOption {
+      type = types.str;
+      example = "linus";
+      description = "The name of the user.";
+    };
+
     home = {
       directory = mkOption {
         type = types.str;
-        description = ''
-          Home directory of the user.
-          When using nix-heim as a nixos module it will by default be set to `users.users.<name>.home`.
-        '';
+        default = "/home/${config.user}";
+        defaultText = "/home/\${config.user}";
+        description = "Home directory of the user.";
         apply = x: assertAbsolutePath x "<home.directory>";
       };
 

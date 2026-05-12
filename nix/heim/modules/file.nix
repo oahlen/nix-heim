@@ -33,7 +33,7 @@
           throw "files.\"${name}\"${label} must define only one of source and text."
         else if config.source == null then
           pkgs.writeTextFile {
-            name = "heim-" + lib.strings.sanitizeDerivationName name;
+            name = "heim-${lib.strings.sanitizeDerivationName name}";
             inherit (config) text;
           }
         else if !builtins.pathExists config.source then

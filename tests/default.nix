@@ -15,11 +15,10 @@ nix-heim pkgs [
       ...
     }:
     {
+      user = "nixos";
       overwrite = true;
 
       home = {
-        directory = "/home/nixos";
-
         files = {
           # Test expanded directory works
           "directory1".source = ./files/directory1;

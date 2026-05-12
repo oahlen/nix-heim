@@ -41,7 +41,12 @@ let
       config = {
         packages =
           let
-            environment = callPackage ../heim/environment.nix { inherit (config.heim) files; };
+            environment = callPackage ../heim/environment.nix {
+              inherit (config.heim)
+                files
+                user
+                ;
+            };
           in
           mkIf (config.heim != null) (
             with environment;

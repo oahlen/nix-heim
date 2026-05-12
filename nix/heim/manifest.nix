@@ -1,6 +1,7 @@
 {
   files ? [ ],
   lib,
+  user,
   writeText,
 }:
 let
@@ -127,4 +128,4 @@ let
     in
     builtins.toJSON payload;
 in
-writeText "heim-manifest.json" (generateManifest files)
+writeText "${user}-heim-manifest.json" (generateManifest files)
