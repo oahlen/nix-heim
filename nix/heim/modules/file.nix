@@ -32,7 +32,10 @@
         else if config.source != null && config.text != null then
           throw "files.\"${name}\"${label} must define only one of source and text."
         else if config.source == null then
-          pkgs.writeText (lib.strings.sanitizeDerivationName name) config.text
+          pkgs.writeTextFile {
+            name = "heim-" + lib.strings.sanitizeDerivationName name;
+            inherit (config) text;
+          }
         else if !builtins.pathExists config.source then
           throw "files.\"${name}\"${label}.source does not exist: ${toString config.source}"
         else

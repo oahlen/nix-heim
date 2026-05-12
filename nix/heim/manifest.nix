@@ -127,4 +127,4 @@ let
     in
     builtins.toJSON payload;
 in
-writeText "manifest.json" (generateManifest files)
+writeText "heim-manifest.json" (generateManifest files)
