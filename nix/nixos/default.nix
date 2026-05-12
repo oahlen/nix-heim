@@ -50,7 +50,7 @@ let
               activate
               deactivate
             ]
-            ++ config.heim.packages
+            ++ config.heim.home.packages
           );
       };
     };

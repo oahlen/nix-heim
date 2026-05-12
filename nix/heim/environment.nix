@@ -63,9 +63,9 @@ let
     name = "heim-environment";
 
     paths = packages ++ [
-      linker
       activate
       deactivate
+      linker
       switch
     ];
 
@@ -76,12 +76,12 @@ let
 
     passthru = {
       inherit
-        manifest
-        linker
         activate
         deactivate
-        install
         environment
+        install
+        linker
+        manifest
         ;
     };
   };

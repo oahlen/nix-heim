@@ -25,8 +25,8 @@ let
   cfg = evaluated.config;
 
   environment = callPackage ./environment.nix {
-    inherit (cfg)
-      files
+    inherit (cfg) files;
+    inherit (cfg.home)
       packages
       pathsToLink
       extraOutputsToInstall

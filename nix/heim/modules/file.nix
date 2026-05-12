@@ -139,7 +139,6 @@
                         Only a single file variant can be set as default.
                       '';
                     };
-
                   };
                   config = {
                     resolvedSource = resolveVariantSource name config;

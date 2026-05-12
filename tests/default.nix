@@ -30,6 +30,22 @@ nix-heim pkgs [
             overwrite = false;
           };
         };
+
+        packages = [ pkgs.htop ];
+
+        sessionVariables = {
+          EDITOR = "vim";
+          FILE = ./default.nix;
+          HTOP_PATH = lib.getExe pkgs.htop;
+          INTEGER = 1;
+          PAGER = "less";
+          PATH = "$HOME/bin";
+        };
+
+        sessionPath = [
+          "$HOME/.local/bin"
+          "${config.xdg.config.directory}/scrips"
+        ];
       };
 
       xdg.config.files = {
@@ -57,22 +73,6 @@ nix-heim pkgs [
           };
         };
       };
-
-      sessionVariables = {
-        EDITOR = "vim";
-        FILE = ./default.nix;
-        HTOP_PATH = lib.getExe pkgs.htop;
-        INTEGER = 1;
-        PAGER = "less";
-        PATH = "$HOME/bin";
-      };
-
-      sessionPath = [
-        "$HOME/.local/bin"
-        "${config.xdg.config.directory}/scrips"
-      ];
-
-      packages = [ pkgs.htop ];
     }
   )
 ]

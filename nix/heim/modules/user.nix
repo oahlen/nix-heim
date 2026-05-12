@@ -47,6 +47,76 @@ in
         };
         description = "Files to install in the configured home directory.";
       };
+
+      packages = mkOption {
+        type = types.listOf types.package;
+        default = [ ];
+        description = "Packages to include in the resulting profile environment.";
+      };
+
+      pathsToLink = mkOption {
+        type = types.listOf types.str;
+        default = [ "/" ];
+        description = ''
+          Paths to link in the resulting user profile environment.
+          This option has no effect when using nix-heim as a NixOS module.
+          See `environment.pathsToLink` in NixOS to configure paths to link in user environments.
+        '';
+      };
+
+      extraOutputsToInstall = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = ''
+          Extra outputs to install for packages in the resulting user profile environment.
+          This option has no effect when using nix-heim as a NixOS module.
+          See `environment.extraOutputsToInstall` in NixOS to configure extra outputs in user environments.
+        '';
+      };
+
+      sessionVariables = mkOption {
+        type = types.lazyAttrsOf (
+          types.oneOf [
+            types.str
+            types.path
+            types.int
+            types.float
+          ]
+        );
+        default = { };
+        description = ''
+          Session variables for this user exposed as a POSIX compliant shell script.
+
+          Two ways of sourcing the script are available:
+
+          1. Via the Nix store path exposed as `config.sessionVariablesPackage`, suitable for use in managed dotfiles:
+             `. ''${config.sessionVariablesPackage}`
+
+          2. Via `XDG_DATA_DIRS` discovery (requires `/share` in `home.pathsToLink` for standalone installs or `environment.pathsToLink` for nixos respectively):
+             The script is installed to `<profile>/share/heim/session-vars.sh`.
+        '';
+
+        example = {
+          EDITOR = "vim";
+          PAGER = "less";
+        };
+      };
+
+      sessionPath = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        description = "Directories to prepend the $PATH variable in the generated session variables script.";
+        example = [
+          "$HOME/.local/bin"
+          "\${xdg.config.directory}/scrips"
+        ];
+      };
+
+      loadSessionVariables = mkOption {
+        type = types.path;
+        readOnly = true;
+        description = "Path to the POSIX compliant shell script containing the configured session variables.";
+      };
     };
 
     xdg = {
@@ -111,70 +181,6 @@ in
       };
     };
 
-    packages = mkOption {
-      type = types.listOf types.package;
-      default = [ ];
-      description = "Packages to include in the resulting profile environment.";
-    };
-
-    pathsToLink = mkOption {
-      type = types.listOf types.str;
-      default = [ "/" ];
-      description = ''
-        Paths to link in the resulting user profile environment.
-        This option has no effect when using nix-heim as a NixOS module.
-        See `environment.pathsToLink` in NixOS to configure paths to link in user environments.
-      '';
-    };
-
-    extraOutputsToInstall = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-      description = ''
-        Extra outputs to install for packages in the resulting user profile environment.
-        This option has no effect when using nix-heim as a NixOS module.
-        See `environment.extraOutputsToInstall` in NixOS to configure extra outputs in user environments.
-      '';
-    };
-
-    sessionVariables = mkOption {
-      type = types.lazyAttrsOf (
-        types.oneOf [
-          types.str
-          types.path
-          types.int
-          types.float
-        ]
-      );
-      default = { };
-      description = ''
-        Session variables for this user exposed as a POSIX compliant shell script.
-
-        Two ways of sourcing the script are available:
-
-        1. Via the Nix store path exposed as `config.sessionVariablesPackage`, suitable for use in managed dotfiles:
-           `. ''${config.sessionVariablesPackage}`
-
-        2. Via `XDG_DATA_DIRS` discovery (requires `/share` in `pathsToLink` for standalone installs or `environment.pathsToLink` for nixos respectively):
-           The script is installed to `<profile>/share/heim/session-vars.sh`.
-      '';
-
-      example = {
-        EDITOR = "vim";
-        PAGER = "less";
-      };
-    };
-
-    sessionPath = mkOption {
-      type = types.listOf types.str;
-      default = [ ];
-      description = "Directories to prepend the $PATH variable in the generated session variables script.";
-      example = [
-        "$HOME/.local/bin"
-        "\${xdg.config.directory}/scrips"
-      ];
-    };
-
     overwrite = mkOption {
       type = types.bool;
       default = false;
@@ -184,41 +190,36 @@ in
       '';
     };
 
-    # Internal options
     files = mkOption {
       type = types.listOf types.attrs;
       readOnly = true;
       visible = false;
     };
-
-    loadSessionVariables = mkOption {
-      type = types.path;
-      readOnly = true;
-      description = "Path to the POSIX compliant shell script containing the configured session variables.";
-    };
   };
 
-  config =
-    let
-      sessionVariables = pkgs.callPackage ../session-vars.nix {
-        inherit (config)
-          sessionPath
-          sessionVariables
-          ;
+  config = {
+    files = [
+      config.home.files
+      config.xdg.config.files
+      config.xdg.data.files
+      config.xdg.state.files
+    ];
+
+    home =
+      let
+        sessionVariables = pkgs.callPackage ../session-vars.nix {
+          inherit (config.home)
+            sessionPath
+            sessionVariables
+            ;
+        };
+      in
+      {
+        packages = mkIf (config.home.sessionVariables != { } || config.home.sessionPath != [ ]) [
+          sessionVariables.package
+        ];
+
+        loadSessionVariables = sessionVariables.path;
       };
-    in
-    {
-      files = [
-        config.home.files
-        config.xdg.config.files
-        config.xdg.data.files
-        config.xdg.state.files
-      ];
-
-      loadSessionVariables = sessionVariables.path;
-
-      packages = mkIf (config.sessionVariables != { } || config.sessionPath != [ ]) [
-        sessionVariables.package
-      ];
-    };
+  };
 }
