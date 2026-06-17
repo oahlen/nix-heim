@@ -28,6 +28,12 @@ nix-heim pkgs [
             source = ./files/directory2;
             overwrite = false;
           };
+
+          # Test derivation directory is symlinked as a single entry (no recursion)
+          "derivation-dir".source = pkgs.runCommand "test-derivation-dir" { } ''
+            mkdir -p $out
+            echo "hello" > $out/hello.txt
+          '';
         };
 
         packages = [ pkgs.htop ];

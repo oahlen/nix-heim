@@ -231,8 +231,11 @@ fn ensure_no_duplicates(entries: &Vec<FileEntry>) -> anyhow::Result<()> {
 
 fn validate(entry: &FileEntry, home: &PathBuf) -> anyhow::Result<()> {
     for e in &entry.sources {
-        if !e.source.is_file() {
-            anyhow::bail!("Source path must be a file: {}", e.source.display());
+        if !e.source.is_file() && !e.source.is_dir() {
+            anyhow::bail!(
+                "Source path must be a file or directory: {}",
+                e.source.display()
+            );
         }
     }
 
@@ -498,7 +501,18 @@ mod tests {
     }
 
     #[test]
-    fn validate_returns_error_when_source_is_not_a_file() {
+    fn validate_succeeds_for_directory_source() {
+        // Arrange
+        let base = test_dir();
+        let home = PathBuf::from("/home/user");
+        let entry = FileEntry::create(base.clone(), home.join("target"), false);
+
+        // Act + Assert
+        assert!(validate(&entry, &home).is_ok());
+    }
+
+    #[test]
+    fn validate_returns_error_when_source_does_not_exist() {
         // Arrange
         let entry = make_entry("/nonexistent/path", "/home/user/target");
         let home = PathBuf::from("/home/user");
