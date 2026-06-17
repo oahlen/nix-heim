@@ -18,7 +18,9 @@ let
 
   package = writeTextFile {
     name = "heim-session-vars";
-    destination = destination;
+
+    inherit destination;
+
     text = ''
       ${concatStringsSep "\n" (mapAttrsToList export sessionVariables)};
 
