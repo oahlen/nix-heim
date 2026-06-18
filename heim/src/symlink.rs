@@ -41,12 +41,17 @@ impl Symlink {
         if let Ok(meta) = self.target.symlink_metadata() {
             if meta.is_symlink() {
                 debug!("Overwriting existing symlink {}", self.target.display());
+                fs::remove_file(&self.target)?;
             } else if self.overwrite {
                 warn!("Overwriting existing file {}", self.target.display());
+                if meta.is_dir() {
+                    fs::remove_dir_all(&self.target)?;
+                } else {
+                    fs::remove_file(&self.target)?;
+                }
             } else {
                 anyhow::bail!("Unable to install entry {}, another file exists", self)
             }
-            fs::remove_file(&self.target)?;
         }
 
         Ok(unix_fs::symlink(&self.source, &self.target)?)
@@ -173,6 +178,24 @@ mod tests {
     }
 
     #[test]
+    fn install_replaces_existing_directory_on_overwrite() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = base.join("existing-dir");
+        fs::create_dir_all(&target).unwrap();
+        write_file(&target, "child.txt", "child");
+
+        // Act
+        let entry = Symlink::new(source.clone(), target.clone(), true);
+        entry.install().unwrap();
+
+        // Assert
+        assert!(target.is_symlink());
+        assert_eq!(entry.is_installed(), true);
+    }
+
+    #[test]
     fn install_fails_on_existing_on_no_overwrite() {
         // Arrange
         let base = test_dir();
@@ -189,6 +212,23 @@ mod tests {
         assert!(!target.is_symlink());
         assert_eq!(entry.is_installed(), false);
         assert_eq!(fs::read_to_string(&target).unwrap(), "target");
+    }
+
+    #[test]
+    fn install_fails_on_existing_directory_on_no_overwrite() {
+        // Arrange
+        let base = test_dir();
+        let source = write_file(&base, "source.txt", "src");
+        let target = base.join("existing-dir");
+        fs::create_dir_all(&target).unwrap();
+
+        // Act
+        let entry = Symlink::new(source, target.clone(), false);
+        let result = entry.install();
+
+        // Assert
+        assert!(result.is_err());
+        assert!(target.is_dir());
     }
 
     #[test]
