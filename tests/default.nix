@@ -20,13 +20,14 @@ nix-heim pkgs [
 
       home = {
         files = {
-          # Test expanded directory works
+          # Test directory is symlinked as-is by default
           "directory1".source = ./files/directory1;
 
-          # Test inverted overwrite works and propagates to child entries
+          # Test recursive directory expansion works and overwrite propagates to child entries correctly
           "directory2" = {
             source = ./files/directory2;
             overwrite = false;
+            recursive = true;
           };
 
           # Test derivation directory is symlinked as a single entry (no recursion)
@@ -57,7 +58,7 @@ nix-heim pkgs [
         # Test file with source works
         "foobar/foobar_1.txt".source = ./files/file_1;
 
-        # Test file with 2 variants works
+        # Test file with 3 variants works (file, text, directory)
         "foobar/foobar_2.txt" = {
           variants = {
             dark = {
@@ -68,6 +69,10 @@ nix-heim pkgs [
             light.text = ''
               Content
             '';
+
+            other = {
+              source = ./files/directory1;
+            };
           };
         };
 

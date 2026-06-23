@@ -52,16 +52,6 @@
         else
           null;
 
-      resolveVariantSource =
-        label: config:
-        let
-          source = resolveSource label config;
-        in
-        if isDirectory source then
-          throw "files.\"${name}\".variants.${label}.source must resolve to a file: ${toString source}"
-        else
-          source;
-
       sourceOptions = {
         source = mkOption {
           type = types.nullOr (
@@ -74,7 +64,6 @@
           description = ''
             Source path for the file or directory to install.
             Mutually exclusive with 'text' and 'variants'.
-            NOTE that directories are not allowed for file variants.
           '';
         };
 
@@ -144,7 +133,7 @@
                     };
                   };
                   config = {
-                    resolvedSource = resolveVariantSource name config;
+                    resolvedSource = resolveSource name config;
                   };
                 }
               )
@@ -153,7 +142,16 @@
           default = { };
           description = ''
             Extra file variants that can be installed instead of the default.
-            Applied with the `--variant` option when activating the configuration.'';
+            Applied with the `--variant` option when activating the configuration.
+          '';
+        };
+
+        recursive = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Whether to recursively discover files and install them individually when 'source' is a directory.
+          '';
         };
 
         overwrite = mkOption {

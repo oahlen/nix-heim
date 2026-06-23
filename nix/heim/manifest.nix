@@ -89,7 +89,7 @@ let
       entries =
         if file.resolvedSource == null then
           [ (mkEntry targetRoot (mkVariantSources name file)) ]
-        else if file.isDirectory then
+        else if file.recursive then
           map (entry: mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources entry.source)) (
             listFilesRecursive "" file.resolvedSource
           )
