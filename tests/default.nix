@@ -6,83 +6,85 @@ let
   };
   nix-heim = import ../.;
 in
-nix-heim pkgs [
-  (
-    {
-      config,
-      lib,
-      pkgs,
-      ...
-    }:
-    {
-      user = "nixos";
-      overwrite = true;
+nix-heim pkgs {
+  modules = [
+    (
+      {
+        config,
+        lib,
+        pkgs,
+        ...
+      }:
+      {
+        user = "nixos";
+        overwrite = true;
 
-      home = {
-        files = {
-          # Test directory is symlinked as-is by default
-          "directory1".source = ./files/directory1;
+        home = {
+          files = {
+            # Test directory is symlinked as-is by default
+            "directory1".source = ./files/directory1;
 
-          # Test recursive directory expansion works and overwrite propagates to child entries correctly
-          "directory2" = {
-            source = ./files/directory2;
-            overwrite = false;
-            recursive = true;
-          };
-
-          # Test derivation directory is symlinked as a single entry (no recursion)
-          "derivation-dir".source = pkgs.runCommand "test-derivation-dir" { } ''
-            mkdir -p $out
-            echo "hello" > $out/hello.txt
-          '';
-        };
-
-        packages = [ pkgs.htop ];
-
-        sessionVariables = {
-          EDITOR = "vim";
-          FILE = ./default.nix;
-          HTOP_PATH = lib.getExe pkgs.htop;
-          INTEGER = 1;
-          PAGER = "less";
-          PATH = "$HOME/bin";
-        };
-
-        sessionPath = [
-          "$HOME/.local/bin"
-          "${config.xdg.config.directory}/scrips"
-        ];
-      };
-
-      xdg.config.files = {
-        # Test file with source works
-        "foobar/foobar_1.txt".source = ./files/file_1;
-
-        # Test file with 3 variants works (file, text, directory)
-        "foobar/foobar_2.txt" = {
-          variants = {
-            dark = {
-              source = ./files/file_1;
-              default = true;
+            # Test recursive directory expansion works and overwrite propagates to child entries correctly
+            "directory2" = {
+              source = ./files/directory2;
+              overwrite = false;
+              recursive = true;
             };
 
-            light.text = ''
-              Content
+            # Test derivation directory is symlinked as a single entry (no recursion)
+            "derivation-dir".source = pkgs.runCommand "test-derivation-dir" { } ''
+              mkdir -p $out
+              echo "hello" > $out/hello.txt
             '';
+          };
 
-            other = {
-              source = ./files/directory1;
+          packages = [ pkgs.htop ];
+
+          sessionVariables = {
+            EDITOR = "vim";
+            FILE = ./default.nix;
+            HTOP_PATH = lib.getExe pkgs.htop;
+            INTEGER = 1;
+            PAGER = "less";
+            PATH = "$HOME/bin";
+          };
+
+          sessionPath = [
+            "$HOME/.local/bin"
+            "${config.xdg.config.directory}/scrips"
+          ];
+        };
+
+        xdg.config.files = {
+          # Test file with source works
+          "foobar/foobar_1.txt".source = ./files/file_1;
+
+          # Test file with 3 variants works (file, text, directory)
+          "foobar/foobar_2.txt" = {
+            variants = {
+              dark = {
+                source = ./files/file_1;
+                default = true;
+              };
+
+              light.text = ''
+                Content
+              '';
+
+              other = {
+                source = ./files/directory1;
+              };
+            };
+          };
+
+          # Test file with generator works
+          "foobar/foobar_3.txt".text = lib.generators.toINI { } {
+            main = {
+              foo = "bar";
             };
           };
         };
-
-        # Test file with generator works
-        "foobar/foobar_3.txt".text = lib.generators.toINI { } {
-          main = {
-            foo = "bar";
-          };
-        };
-      };
-    }
-  )
-]
+      }
+    )
+  ];
+}

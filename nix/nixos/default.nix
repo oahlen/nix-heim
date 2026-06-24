@@ -16,6 +16,7 @@ let
 
   heimModule = types.submoduleWith {
     class = "heim";
+    specialArgs = global.config.heim.specialArgs;
     modules = singleton (
       { config, ... }:
       {
@@ -71,6 +72,12 @@ in
       default = [ ];
       example = literalExpression "[ ./module.nix ]";
       type = types.listOf types.raw;
+    };
+
+    heim.specialArgs = mkOption {
+      description = "Extra arguments passed to all Nix-heim modules.";
+      default = { };
+      type = types.attrsOf types.raw;
     };
   };
 }
