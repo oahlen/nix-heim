@@ -3,7 +3,7 @@
   callPackage,
   extraOutputsToInstall ? [ ],
   files ? [ ],
-  activationScript,
+  activationScript ? null,
   lib,
   nix,
   packages ? [ ],
@@ -32,7 +32,7 @@ let
     ${getExe linker} activate ${manifest} "$@"
 
     # Custom activation hooks
-    ${activationScript}
+    ${lib.optionalString (activationScript != null) activationScript}
   '';
 
   deactivate = writeShellScriptBin "heim-deactivate" ''
