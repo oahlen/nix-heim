@@ -58,7 +58,7 @@ let
 
     ln -sfn "$TARGET/nix/profiles/profile" "$TARGET/nix/profile"
 
-    heim-activate # Call activate from path to ensure we are running from the new profile
+    "$TARGET/nix/profile/bin/heim-activate"
   '';
 
   install = writeShellScriptBin "install" ''
