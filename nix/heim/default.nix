@@ -18,6 +18,7 @@ let
         };
       }
       ./modules/user.nix
+      ./modules/hooks.nix
     ]
     ++ modules;
   };
