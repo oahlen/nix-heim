@@ -31,7 +31,6 @@ let
   activate = writeShellScriptBin "heim-activate" ''
     ${getExe linker} activate ${manifest} "$@"
 
-    # Custom activation hooks
     ${lib.optionalString (activationScript != null) activationScript}
   '';
 

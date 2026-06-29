@@ -37,7 +37,11 @@ in
 
   config = {
     activationScript = mkIf (config.activationHooks != [ ]) (
-      pkgs.writeShellScript "heim-activation-script" (concatStringsSep "\n" config.activationHooks)
+      pkgs.writeShellScript "heim-activation-script" ''
+        echo "Running custom activation hooks ..."
+
+        ${concatStringsSep "\n" config.activationHooks}
+      ''
     );
   };
 }
