@@ -44,6 +44,7 @@ let
           let
             environment = callPackage ../heim/environment.nix {
               inherit (config.heim)
+                activationScript
                 files
                 user
                 ;

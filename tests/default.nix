@@ -36,6 +36,10 @@ nix-heim pkgs {
               mkdir -p $out
               echo "hello" > $out/hello.txt
             '';
+
+            vars.text = ''
+              . ${config.home.loadSessionVariables}
+            '';
           };
 
           packages = [ pkgs.htop ];
@@ -84,6 +88,11 @@ nix-heim pkgs {
             };
           };
         };
+
+        activationHooks = [
+          ''echo "Hello World!"''
+          "bat cache --build"
+        ];
       }
     )
   ];

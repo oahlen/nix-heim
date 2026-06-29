@@ -14,7 +14,7 @@ let
 in
 {
   options = {
-    hooks = mkOption {
+    activationHooks = mkOption {
       type = types.listOf types.str;
       default = [ ];
       description = ''
@@ -28,16 +28,16 @@ in
       ];
     };
 
-    hooksScript = mkOption {
+    activationScript = mkOption {
       type = types.nullOr types.package;
       readOnly = true;
-      description = "The concatenated hooks script package, or null if no hooks are defined.";
+      description = "The concatenated activation hooks script package, or null if no hooks are defined.";
     };
   };
 
   config = {
-    hooksScript = mkIf (config.home.hooks != [ ]) (
-      pkgs.writeShellScript "heim-hooks" (concatStringsSep "\n" config.home.hooks)
+    activationScript = mkIf (config.activationHooks != [ ]) (
+      pkgs.writeShellScript "heim-activation-script" (concatStringsSep "\n" config.activationHooks)
     );
   };
 }

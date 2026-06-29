@@ -17,8 +17,9 @@ let
           inherit pkgs;
         };
       }
+      ./modules/activation-hooks.nix
+      ./modules/session-vars.nix
       ./modules/user.nix
-      ./modules/hooks.nix
     ]
     ++ modules;
   };
@@ -27,6 +28,7 @@ let
 
   environment = callPackage ./environment.nix {
     inherit (cfg)
+      activationScript
       files
       user
       ;

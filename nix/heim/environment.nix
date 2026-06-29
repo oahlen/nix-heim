@@ -3,6 +3,7 @@
   callPackage,
   extraOutputsToInstall ? [ ],
   files ? [ ],
+  activationScript,
   lib,
   nix,
   packages ? [ ],
@@ -29,6 +30,9 @@ let
 
   activate = writeShellScriptBin "heim-activate" ''
     ${getExe linker} activate ${manifest} "$@"
+
+    # Custom activation hooks
+    ${activationScript}
   '';
 
   deactivate = writeShellScriptBin "heim-deactivate" ''
