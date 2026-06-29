@@ -198,7 +198,7 @@ in
     files = mkOption {
       type = types.listOf types.attrs;
       readOnly = true;
-      visible = false;
+      internal = true;
     };
   };
 

@@ -83,8 +83,8 @@
               types.package
             ]
           );
+          readOnly = true;
           internal = true;
-          visible = false;
           description = "Resolved derivation for source or text.";
         };
       };
@@ -165,7 +165,6 @@
 
         relativeTo = mkOption {
           internal = true;
-          visible = false;
           type = types.path;
           default = rootDir;
           description = "Path that installed symlinks are relative to.";
@@ -174,8 +173,8 @@
         };
 
         isDirectory = mkOption {
+          readOnly = true;
           internal = true;
-          visible = false;
           type = types.bool;
           description = "True if the resolved source of this entry is a directory.";
         };
