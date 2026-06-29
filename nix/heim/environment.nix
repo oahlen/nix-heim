@@ -65,6 +65,7 @@ let
     "$TARGET/nix/profile/bin/heim-activate"
   '';
 
+  # Passthru script to aid in initial installation
   install = writeShellScriptBin "install" ''
     ${getExe switch} ${environment}
   '';
