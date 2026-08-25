@@ -88,17 +88,30 @@ let
         inherit (file) overwrite;
       };
 
+      mkRecursiveStoreEntries =
+        let
+          storeRoot = "${file.resolvedSource}";
+        in
+        map (
+          entry:
+          mkEntry (joinTarget targetRoot entry.relative) (
+            mkDefaultSources false (storeRoot + "/" + entry.relative)
+          )
+        );
+
+      mkRecursiveUntrackedEntries = map (
+        entry: mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources true entry.source)
+      );
+
       entries =
         if file.resolvedSource == null then
           [ (mkEntry targetRoot (mkVariantSources file.keepOutOfStore name file)) ]
         else if file.recursive then
-          map (
-            entry:
-            mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources file.keepOutOfStore entry.source)
-          ) (listFilesRecursive "" file.resolvedSource)
+          (if file.keepOutOfStore then mkRecursiveUntrackedEntries else mkRecursiveStoreEntries) (
+            listFilesRecursive "" file.resolvedSource
+          )
         else
           [ (mkEntry targetRoot (mkDefaultSources file.keepOutOfStore file.resolvedSource)) ];
-
     in
     entries;
 
