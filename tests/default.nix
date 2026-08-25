@@ -21,7 +21,7 @@ nix-heim pkgs {
 
         home = {
           files = {
-            # Test directory is symlinked as-is by default
+            # Test directory is symlinked as-is by default, copied into the Nix store
             "directory1".source = ./files/directory1;
 
             # Test recursive directory expansion works and overwrite propagates to child entries correctly
@@ -29,6 +29,12 @@ nix-heim pkgs {
               source = ./files/directory2;
               overwrite = false;
               recursive = true;
+            };
+
+            # Test keepOutOfStore preserves the original path instead of copying it into the store
+            "directory3" = {
+              source = ./files/directory3;
+              keepOutOfStore = true;
             };
 
             # Test derivation directory is symlinked as a single entry (no recursion)

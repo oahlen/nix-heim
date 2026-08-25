@@ -163,6 +163,15 @@
           '';
         };
 
+        keepOutOfStore = mkOption {
+          type = types.bool;
+          default = false;
+          description = ''
+            Whether to keep the symlink source outside of the Nix store instead of importing it into the store.
+            This is useful if you want to make quick edits to the symlink source without having to create a new profile generation.
+          '';
+        };
+
         relativeTo = mkOption {
           internal = true;
           type = types.path;

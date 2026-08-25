@@ -35,7 +35,7 @@ let
       let
         fileType = entries.${name};
         relativePath = joinTarget prefix name;
-        childPath = dir + "/${name}"; # Avoids coercing linked source file into the nix store
+        childPath = dir + "/${name}"; # Avoids coercing linked source file into the nix store at this stage
       in
       if fileType == "directory" then
         listFilesRecursive relativePath childPath
@@ -50,21 +50,23 @@ let
         [ ]
     ) names;
 
-  mkDefaultSources = source: [
+  resolveSourcePath = keepOutOfStore: source: if keepOutOfStore then toString source else "${source}";
+
+  mkDefaultSources = keepOutOfStore: source: [
     {
       name = "default";
-      source = toString source;
+      source = resolveSourcePath keepOutOfStore source;
       default = true;
     }
   ];
 
   mkVariantSources =
-    name: file:
+    keepOutOfStore: name: file:
     let
       variants = mapAttrsToList (name: file: {
         inherit name;
         inherit (file) default;
-        source = toString file.resolvedSource;
+        source = resolveSourcePath keepOutOfStore file.resolvedSource;
       }) file.variants;
 
       defaults = builtins.filter (v: v.default) variants;
@@ -88,13 +90,14 @@ let
 
       entries =
         if file.resolvedSource == null then
-          [ (mkEntry targetRoot (mkVariantSources name file)) ]
+          [ (mkEntry targetRoot (mkVariantSources file.keepOutOfStore name file)) ]
         else if file.recursive then
-          map (entry: mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources entry.source)) (
-            listFilesRecursive "" file.resolvedSource
-          )
+          map (
+            entry:
+            mkEntry (joinTarget targetRoot entry.relative) (mkDefaultSources file.keepOutOfStore entry.source)
+          ) (listFilesRecursive "" file.resolvedSource)
         else
-          [ (mkEntry targetRoot (mkDefaultSources file.resolvedSource)) ];
+          [ (mkEntry targetRoot (mkDefaultSources file.keepOutOfStore file.resolvedSource)) ];
 
     in
     entries;
