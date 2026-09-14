@@ -36,8 +36,8 @@ in
     home = {
       directory = mkOption {
         type = types.str;
-        default = "/home/${config.user}";
-        defaultText = "/home/\${config.user}";
+        default = if pkgs.stdenv.isDarwin then "/Users/${config.user}" else "/home/${config.user}";
+        defaultText = "/home/\${config.user} (or /Users/\${config.user} on Darwin)";
         description = "Home directory of the user.";
         apply = x: assertAbsolutePath x "<home.directory>";
       };
