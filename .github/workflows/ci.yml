@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            heim/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('heim/Cargo.lock') }}
+
+      - name: Check formatting
+        run: cargo fmt --manifest-path heim/Cargo.toml --check
+
+      - name: Lint
+        run: cargo clippy --manifest-path heim/Cargo.toml -- -D warnings
+
+      - name: Build
+        run: cargo build --manifest-path heim/Cargo.toml --release
+
+      - name: Test
+        run: cargo test --manifest-path heim/Cargo.toml
+
+  nix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: cachix/install-nix-action@v31
+
+      - name: Format check
+        run: nix-shell -p nixfmt-tree --run "treefmt --ci"
+
+      - name: Lint
+        run: nix-shell -p statix --run "statix check"
+
+      - name: Build and verify test manifest
+        run: nix build -f tests manifest && jq < ./result
+
+      - name: Build standalone test module
+        run: nix build -f tests/default.nix
