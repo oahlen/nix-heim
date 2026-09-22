@@ -102,12 +102,7 @@ impl Symlink {
 
 impl Display for Symlink {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} -> {}",
-            self.source.display(),
-            self.target.display()
-        )
+        write!(f, "{} -> {}", self.source.display(), self.target.display())
     }
 }
 
