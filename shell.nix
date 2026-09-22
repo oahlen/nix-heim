@@ -16,9 +16,11 @@ pkgs.mkShell {
     clippy
     jq
     just
+    nixfmt-tree
     pkg-config
     rust-analyzer
     rustc
     rustfmt
+    statix
   ];
 }
