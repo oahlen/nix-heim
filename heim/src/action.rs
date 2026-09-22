@@ -41,7 +41,7 @@ impl Action {
     pub fn activate(&self) -> anyhow::Result<()> {
         info!(
             "Installing files from manifest: {}",
-            &self.manifest_path.display()
+            self.manifest_path.display()
         );
 
         let state_path = self.state.previous_manifest()?;
@@ -116,7 +116,7 @@ impl Action {
     pub fn deactivate(&self) -> anyhow::Result<()> {
         info!(
             "Uninstalling files from manifest: {}",
-            &self.manifest_path.display()
+            self.manifest_path.display()
         );
 
         let state_path = self.state.previous_manifest()?;

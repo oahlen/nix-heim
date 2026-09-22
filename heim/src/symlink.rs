@@ -105,8 +105,8 @@ impl Display for Symlink {
         write!(
             f,
             "{} -> {}",
-            &self.source.display(),
-            &self.target.display()
+            self.source.display(),
+            self.target.display()
         )
     }
 }
